@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オフライン - Vibe Coder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            opacity: 0.8;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .dot.offline {
+            background: #ff6b6b;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        .dot.online {
+            background: #51cf66;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .features {
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .features h3 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .feature-list {
+            list-style: none;
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.8rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .feature-icon {
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.5rem; }
+            p { font-size: 1rem; }
+            .icon { font-size: 3rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📱</div>
+        
+        <h1>オフライン</h1>
+        
+        <p>
+            現在インターネットに接続されていません。<br>
+            接続が復旧するまでお待ちください。
+        </p>
+
+        <div class="actions">
+            <button onclick="checkConnection()">
+                接続を確認
+            </button>
+            
+            <button onclick="goHome()">
+                ホームに戻る
+            </button>
+            
+            <button onclick="reloadPage()">
+                ページを再読み込み
+            </button>
+        </div>
+
+        <div class="status">
+            <div class="status-indicator">
+                <div class="dot" id="connectionDot"></div>
+                <span id="connectionStatus">オフライン</span>
+            </div>
+        </div>
+
+        <div class="features">
+            <h3>オフライン時でも利用可能</h3>
+            <ul class="feature-list">
+                <li class="feature-item">
+                    <span class="feature-icon">📋</span>
+                    <span>キャッシュされたページの閲覧</span>
+                </li>
+                <li class="feature-item">
+                    <span class="feature-icon">⚙️</span>
+                    <span>ローカル設定の変更</span>
+                </li>
+                <li class="feature-item">
+                    <span class="feature-icon">📱</span>
+                    <span>PWAとしてのオフライン機能</span>
+                </li>
+                <li class="feature-item">
+                    <span class="feature-icon">🔄</span>
+                    <span>接続復旧時の自動同期</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 接続状態の監視
+        function updateConnectionStatus() {
+            const dot = document.getElementById('connectionDot');
+            const status = document.getElementById('connectionStatus');
+            
+            if (navigator.onLine) {
+                dot.className = 'dot online';
+                status.textContent = 'オンライン';
+            } else {
+                dot.className = 'dot offline';
+                status.textContent = 'オフライン';
+            }
+        }
+
+        // 接続確認
+        function checkConnection() {
+            updateConnectionStatus();
+            
+            if (navigator.onLine) {
+                // オンラインの場合は元のページに戻る
+                if (document.referrer) {
+                    window.location.href = document.referrer;
+                } else {
+                    window.location.href = '/';
+                }
+            } else {
+                // オフラインの場合はメッセージを表示
+                alert('まだインターネットに接続されていません。');
+            }
+        }
+
+        // ホームに戻る
+        function goHome() {
+            window.location.href = '/';
+        }
+
+        // ページを再読み込み
+        function reloadPage() {
+            window.location.reload();
+        }
+
+        // イベントリスナーの設定
+        window.addEventListener('online', () => {
+            updateConnectionStatus();
+            setTimeout(() => {
+                if (navigator.onLine) {
+                    checkConnection();
+                }
+            }, 1000);
+        });
+
+        window.addEventListener('offline', updateConnectionStatus);
+
+        // 初期状態の設定
+        updateConnectionStatus();
+
+        // 定期的な接続確認
+        setInterval(() => {
+            updateConnectionStatus();
+        }, 5000);
+
+        // Service Worker との通信
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', event => {
+                const { type, data } = event.data;
+                
+                if (type === 'NETWORK_STATUS_CHANGED') {
+                    updateConnectionStatus();
+                }
+            });
+        }
+
+        // バックグラウンドでの接続確認
+        async function backgroundConnectionCheck() {
+            try {
+                const response = await fetch('/', { 
+                    method: 'HEAD',
+                    cache: 'no-cache'
+                });
+                
+                if (response.ok) {
+                    // 接続が復旧した場合
+                    updateConnectionStatus();
+                    return true;
+                }
+            } catch (error) {
+                // まだオフライン
+                return false;
+            }
+            return false;
+        }
+
+        // 10秒ごとにバックグラウンド確認
+        setInterval(backgroundConnectionCheck, 10000);
+
+        console.log('Vibe Coder - Offline page loaded');
+    </script>
+</body>
+</html>

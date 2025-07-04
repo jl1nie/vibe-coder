@@ -1,0 +1,49 @@
+{
+  "name": "@vibe-coder/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vibe Coder PWA クライアント",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:e2e": "playwright test",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "serve": "serve dist -s -l 3000"
+  },
+  "dependencies": {
+    "@vibe-coder/shared": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router-dom": "^6.22.0",
+    "clsx": "catalog:",
+    "lucide-react": "^0.356.0",
+    "framer-motion": "^11.0.8",
+    "react-use": "^17.5.0",
+    "workbox-window": "^7.0.0",
+    "idb": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-pwa": "^0.19.8",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "playwright": "catalog:",
+    "tailwindcss": "catalog:",
+    "@tailwindcss/forms": "catalog:",
+    "autoprefixer": "^10.4.18",
+    "postcss": "^8.4.35",
+    "serve": "^14.2.1"
+  }
+}
