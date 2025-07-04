@@ -1,10 +1,22 @@
 {
+  "version": 2,
+  "name": "vibe-coder-signaling",
   "functions": {
     "api/**/*.ts": {
-      "runtime": "@vercel/node@3.0.21",
+      "runtime": "@vercel/node@3.0.24",
       "maxDuration": 30
     }
   },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.ts"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
@@ -24,6 +36,10 @@
         {
           "key": "Access-Control-Max-Age",
           "value": "86400"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=60, stale-while-revalidate"
         }
       ]
     }
@@ -34,11 +50,28 @@
       "destination": "/api/signal"
     },
     {
-      "source": "/api/playlists",
+      "source": "/api/playlists", 
       "destination": "/api/playlists"
+    },
+    {
+      "source": "/api/stats",
+      "destination": "/api/stats"
     }
   ],
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/api/index",
+      "permanent": false
+    }
+  ],
+  "regions": ["nrt1", "hnd1", "icn1"],
   "env": {
     "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
   }
 }

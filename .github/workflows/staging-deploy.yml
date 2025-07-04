@@ -1,0 +1,285 @@
+name: 🚀 Staging Deployment
+
+on:
+  push:
+    branches: [ develop, staging ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
+
+jobs:
+  test:
+    name: 🧪 Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🧪 Run tests
+        run: |
+          npm run test
+          npm run test:integration
+
+      - name: 📊 Generate test report
+        run: |
+          echo "# 🧪 Test Results" > test-report.md
+          echo "## Unit Tests" >> test-report.md
+          echo "✅ All unit tests passed" >> test-report.md
+          echo "## Integration Tests" >> test-report.md
+          echo "✅ All integration tests passed" >> test-report.md
+
+      - name: 📋 Comment test results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const testReport = fs.readFileSync('test-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: testReport
+            });
+
+  deploy-staging:
+    name: 🏗️ Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/develop'
+    environment: 
+      name: staging
+      url: https://staging.vibe-coder.space
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: npm ci
+
+      - name: 🏗️ Build PWA
+        run: |
+          npm run build
+        env:
+          VITE_APP_ENV: staging
+          VITE_API_BASE_URL: https://staging-api.vibe-coder.space
+          VITE_SIGNALING_URL: https://staging.vibe-coder.space
+          VITE_SENTRY_DSN: ${{ secrets.STAGING_SENTRY_DSN }}
+
+      - name: 🚀 Deploy PWA to Vercel
+        uses: vercel/action@v1
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--env NODE_ENV=staging'
+          working-directory: apps/web
+        
+      - name: 🎯 Deploy Signaling Server
+        working-directory: packages/signaling
+        run: |
+          npx vercel --token ${{ secrets.VERCEL_TOKEN }} \
+                    --scope ${{ secrets.VERCEL_ORG_ID }} \
+                    --env NODE_ENV=staging \
+                    --env KV_URL=${{ secrets.STAGING_KV_URL }} \
+                    --env KV_REST_API_URL=${{ secrets.STAGING_KV_REST_API_URL }} \
+                    --env KV_REST_API_TOKEN=${{ secrets.STAGING_KV_REST_API_TOKEN }} \
+                    --build-env NODE_ENV=staging
+
+      - name: 🔗 Get deployment URLs
+        id: deployment
+        run: |
+          echo "pwa_url=https://staging.vibe-coder.space" >> $GITHUB_OUTPUT
+          echo "signaling_url=https://staging.vibe-coder.space" >> $GITHUB_OUTPUT
+
+      - name: 🚦 Health check
+        run: |
+          # Wait for deployment to be ready
+          sleep 30
+          
+          # Check PWA health
+          curl -f ${{ steps.deployment.outputs.pwa_url }}/health || exit 1
+          
+          # Check Signaling Server health
+          curl -f ${{ steps.deployment.outputs.signaling_url }}/api/health || exit 1
+
+      - name: 📱 Run E2E tests on staging
+        run: |
+          npx playwright install chromium
+          npm run test:e2e -- --base-url=${{ steps.deployment.outputs.pwa_url }}
+        env:
+          E2E_BASE_URL: ${{ steps.deployment.outputs.pwa_url }}
+
+      - name: 📊 Performance audit
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: ${{ steps.deployment.outputs.pwa_url }}
+          configPath: ./.lighthouserc.json
+          uploadArtifacts: true
+
+  notify-deployment:
+    name: 📢 Notify Team
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: always()
+    
+    steps:
+      - name: 📋 Create deployment summary
+        run: |
+          echo "# 🚀 Staging Deployment Summary" > deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "## 🎯 Environment: Staging" >> deployment-summary.md
+          echo "- **PWA URL**: https://staging.vibe-coder.space" >> deployment-summary.md
+          echo "- **Signaling API**: https://staging.vibe-coder.space/api" >> deployment-summary.md
+          echo "- **Commit**: ${{ github.sha }}" >> deployment-summary.md
+          echo "- **Branch**: ${{ github.ref_name }}" >> deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "## 🧪 Test Results" >> deployment-summary.md
+          if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "✅ All tests passed and deployment successful" >> deployment-summary.md
+          else
+            echo "❌ Deployment failed or tests failed" >> deployment-summary.md
+          fi
+          echo "" >> deployment-summary.md
+          echo "## 🔗 Quick Links" >> deployment-summary.md
+          echo "- [Open Staging App](https://staging.vibe-coder.space)" >> deployment-summary.md
+          echo "- [View API Status](https://staging.vibe-coder.space/api/health)" >> deployment-summary.md
+          echo "- [Performance Report](https://staging.vibe-coder.space/lighthouse)" >> deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "## 📝 Manual Testing Checklist" >> deployment-summary.md
+          echo "- [ ] PWA安装和离线功能" >> deployment-summary.md
+          echo "- [ ] WebRTC接続テスト" >> deployment-summary.md
+          echo "- [ ] 音声入力機能" >> deployment-summary.md
+          echo "- [ ] クイックコマンド実行" >> deployment-summary.md
+          echo "- [ ] プレイリスト機能" >> deployment-summary.md
+          echo "- [ ] モバイル操作性" >> deployment-summary.md
+          echo "- [ ] アクセシビリティ" >> deployment-summary.md
+
+      - name: 📢 Notify Slack
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#vibe-coder-dev'
+          text: |
+            🚀 Staging deployment completed
+            
+            Environment: Staging
+            Status: ${{ needs.deploy-staging.result }}
+            URL: https://staging.vibe-coder.space
+            
+            Ready for UX testing and feedback collection!
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  feedback-collection:
+    name: 📝 Setup Feedback Collection
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: success()
+    
+    steps:
+      - name: 📝 Create feedback issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔍 UX Feedback - Staging Deployment ${new Date().toISOString().split('T')[0]}`,
+              body: `
+            # 🎯 UX フィードバック収集
+
+            ## 📱 テスト環境
+            - **URL**: https://staging.vibe-coder.space
+            - **Commit**: ${context.sha}
+            - **Deployed**: ${new Date().toISOString()}
+
+            ## 🧪 テスト項目
+
+            ### PWA基本機能
+            - [ ] ホーム画面への追加
+            - [ ] オフライン動作
+            - [ ] プッシュ通知
+            - [ ] アプリアイコン表示
+
+            ### コア機能
+            - [ ] サーバー接続フロー
+            - [ ] コマンド実行
+            - [ ] 音声入力
+            - [ ] クイックコマンド
+            - [ ] プレイリスト管理
+
+            ### モバイルUX
+            - [ ] タッチ操作性
+            - [ ] スワイプジェスチャー
+            - [ ] 画面回転対応
+            - [ ] キーボード表示時のレイアウト
+
+            ### アクセシビリティ
+            - [ ] スクリーンリーダー対応
+            - [ ] キーボードナビゲーション
+            - [ ] 高コントラストモード
+            - [ ] 音声ガイダンス
+
+            ## 📝 フィードバックフォーム
+
+            ### 良い点
+            <!-- 気に入った機能や使いやすい点を記載 -->
+
+            ### 改善点
+            <!-- 問題や改善すべき点を記載 -->
+
+            ### バグ報告
+            <!-- 発見したバグを記載（再現手順含む） -->
+
+            ### 提案
+            <!-- 新機能の提案や改善アイデア -->
+
+            ## 📊 パフォーマンス
+            - 初回読み込み時間: ___秒
+            - PWA化までの時間: ___秒
+            - 音声認識応答時間: ___秒
+            - コマンド実行時間: ___秒
+
+            ## 📱 テスト環境
+            - デバイス: 
+            - OS: 
+            - ブラウザ: 
+            - 画面サイズ:
+
+            ## 🎯 総合評価
+            - 使いやすさ: ⭐⭐⭐⭐⭐
+            - 機能性: ⭐⭐⭐⭐⭐
+            - パフォーマンス: ⭐⭐⭐⭐⭐
+            - デザイン: ⭐⭐⭐⭐⭐
+
+            ---
+            
+            @team-vibe-coder フィードバックをお願いします！
+            `,
+              labels: ['feedback', 'staging', 'ux-testing']
+            });
+
+            console.log(`Created feedback issue: ${issue.html_url}`);
