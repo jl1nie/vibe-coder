@@ -27,7 +27,10 @@
     "build": "pnpm -r run build",
     "clean": "rm -rf node_modules dist coverage test-results",
     "docker:build": "./scripts/docker-build.sh",
-    "docker:push": "./scripts/docker-push.sh"
+    "docker:push": "./scripts/docker-push.sh",
+    "deploy": "echo 'Use specific deploy commands: deploy:pwa or deploy:signaling'",
+    "deploy:pwa": "cd apps/web && vercel --prod",
+    "deploy:signaling": "cd packages/signaling && vercel --prod"
   },
   "dependencies": {
     "clsx": "^2.1.0",

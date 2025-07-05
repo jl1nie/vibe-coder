@@ -1,5 +1,13 @@
-export * from './types';
+// Core types
+export type * from './types';
+export { PlaylistSchema } from './types';
+
+// Utilities
 export * from './utils';
 export * from './constants';
-export * from './validation';
+
+// Validation functions
+export { validateCommand } from './validation';
+
+// Security functions
 export * from './security';

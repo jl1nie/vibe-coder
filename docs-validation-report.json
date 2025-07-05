@@ -1,88 +1,12 @@
 {
-  "timestamp": "2025-07-05T10:23:02.566Z",
+  "timestamp": "2025-07-05T10:31:30.420Z",
   "summary": {
-    "errors": 5,
-    "warnings": 14,
+    "errors": 0,
+    "warnings": 4,
     "categoriesValidated": 7
   },
-  "errors": [
-    {
-      "message": "Important script \"build\" is missing from package.json",
-      "detail": "",
-      "type": "error"
-    },
-    {
-      "message": "Script \"deploy\" mentioned in README.md does not exist in package.json",
-      "detail": "",
-      "type": "error"
-    },
-    {
-      "message": "Script \"build\" mentioned in README.md does not exist in package.json",
-      "detail": "",
-      "type": "error"
-    },
-    {
-      "message": "Script \"deploy:pwa\" mentioned in README.md does not exist in package.json",
-      "detail": "",
-      "type": "error"
-    },
-    {
-      "message": "Script \"deploy\" mentioned in README.md does not exist in package.json",
-      "detail": "",
-      "type": "error"
-    }
-  ],
+  "errors": [],
   "warnings": [
-    {
-      "message": "Dependency \"react-router-dom\" should use catalog: instead of \"^6.22.0\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"lucide-react\" should use catalog: instead of \"^0.356.0\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"framer-motion\" should use catalog: instead of \"^11.0.8\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"react-use\" should use catalog: instead of \"^17.5.0\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"workbox-window\" should use catalog: instead of \"^7.0.0\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"idb\" should use catalog: instead of \"^8.0.0\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"vite-plugin-pwa\" should use catalog: instead of \"^0.19.8\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"autoprefixer\" should use catalog: instead of \"^10.4.18\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"postcss\" should use catalog: instead of \"^8.4.35\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
-    {
-      "message": "Dependency \"serve\" should use catalog: instead of \"^14.2.1\"",
-      "detail": "/home/minoru/src/vibe-coder/apps/web",
-      "type": "warning"
-    },
     {
       "message": "Potentially outdated version \"20.0.0\" mentioned in README.md (current: 0.1.0)",
       "detail": "",

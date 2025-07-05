@@ -1,5 +1,11 @@
-import { DANGEROUS_PATTERNS, SECURITY_LIMITS } from './constants';
-import { createError, ERROR_CODES } from './utils';
+import { DANGEROUS_PATTERNS, SECURITY_LIMITS, ERROR_CODES } from './constants';
+
+// Helper function to create standardized errors
+function createError(code: string, message: string): Error {
+  const error = new Error(message);
+  (error as any).code = code;
+  return error;
+}
 
 export class SecurityValidator {
   private static instance: SecurityValidator;

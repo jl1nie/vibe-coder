@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 import { z } from 'zod';
 
@@ -8,7 +8,7 @@ function getRateLimitKey(ip: string): string {
 }
 
 // IPアドレスの取得
-function getClientIP(req: NextApiRequest): string {
+function getClientIP(req: VercelRequest): string {
   return (
     (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
     (req.headers['x-real-ip'] as string) ||
@@ -45,7 +45,7 @@ async function checkRateLimit(ip: string): Promise<boolean> {
 }
 
 // CORS ヘッダーの設定
-function setCorsHeaders(res: NextApiResponse) {
+function setCorsHeaders(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -54,8 +54,8 @@ function setCorsHeaders(res: NextApiResponse) {
 
 // メイン API ハンドラー
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // CORS ヘッダーの設定
   setCorsHeaders(res);
@@ -96,8 +96,8 @@ export default async function handler(
 
 // POST リクエストの処理（シグナリングデータの保存）
 async function handlePost(
-  req: NextApiRequest,
-  res: NextApiResponse,
+  req: VercelRequest,
+  res: VercelResponse,
   clientIP: string
 ) {
   // リクエストボディの検証
@@ -155,8 +155,8 @@ async function handlePost(
 
 // GET リクエストの処理（シグナリングデータの取得）
 async function handleGet(
-  req: NextApiRequest,
-  res: NextApiResponse,
+  req: VercelRequest,
+  res: VercelResponse,
   clientIP: string
 ) {
   const { type, serverId } = req.query;

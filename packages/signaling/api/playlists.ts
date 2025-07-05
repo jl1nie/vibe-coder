@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 import { z } from 'zod';
 
@@ -56,7 +56,7 @@ async function searchGitHubPlaylists(): Promise<any[]> {
       return [];
     }
 
-    const searchResults = await response.json();
+    const searchResults = await response.json() as any;
     const playlists: any[] = [];
 
     // 各ファイルの内容を取得
@@ -71,7 +71,7 @@ async function searchGitHubPlaylists(): Promise<any[]> {
 
         if (!fileResponse.ok) continue;
 
-        const fileData = await fileResponse.json();
+        const fileData = await fileResponse.json() as any;
         const content = Buffer.from(fileData.content, 'base64').toString('utf-8');
         const playlistData = JSON.parse(content);
 
@@ -143,8 +143,8 @@ async function updatePlaylistStats(playlistId: string, action: 'view' | 'downloa
 
 // メインハンドラー
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -173,7 +173,7 @@ export default async function handler(
 }
 
 // GET リクエストの処理
-async function handleGet(req: NextApiRequest, res: NextApiResponse) {
+async function handleGet(req: VercelRequest, res: VercelResponse) {
   const { refresh, search, category, author } = req.query;
 
   try {
@@ -265,7 +265,7 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
 }
 
 // POST リクエストの処理（統計更新など）
-async function handlePost(req: NextApiRequest, res: NextApiResponse) {
+async function handlePost(req: VercelRequest, res: VercelResponse) {
   const { action, playlistId } = req.body;
 
   if (!action || !playlistId) {

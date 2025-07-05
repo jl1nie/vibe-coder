@@ -1,4 +1,4 @@
-import { LogLevel, LogMessage } from './types';
+import type { LogLevel, LogMessage } from './types';
 import { ERROR_CODES } from './constants';
 
 export const generateId = (): string => {
@@ -11,7 +11,7 @@ export const createLogger = (context: string) => {
       level,
       message: `[${context}] ${message}`,
       timestamp: new Date().toISOString(),
-      context: data,
+      context: data || {},
     };
     
     if (typeof window !== 'undefined') {

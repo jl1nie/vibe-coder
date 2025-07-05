@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 
 // 統計情報の取得
@@ -22,16 +22,16 @@ async function getSignalingStats(): Promise<any> {
     return {
       signaling: {
         today: {
-          total: parseInt(todayStats.total || '0'),
-          offer: parseInt(todayStats.offer || '0'),
-          answer: parseInt(todayStats.answer || '0'),
-          'ice-candidate': parseInt(todayStats['ice-candidate'] || '0'),
+          total: parseInt((todayStats as any)?.total || '0'),
+          offer: parseInt((todayStats as any)?.offer || '0'),
+          answer: parseInt((todayStats as any)?.answer || '0'),
+          'ice-candidate': parseInt((todayStats as any)?.['ice-candidate'] || '0'),
         },
         yesterday: {
-          total: parseInt(yesterdayStats.total || '0'),
-          offer: parseInt(yesterdayStats.offer || '0'),
-          answer: parseInt(yesterdayStats.answer || '0'),
-          'ice-candidate': parseInt(yesterdayStats['ice-candidate'] || '0'),
+          total: parseInt((yesterdayStats as any)?.total || '0'),
+          offer: parseInt((yesterdayStats as any)?.offer || '0'),
+          answer: parseInt((yesterdayStats as any)?.answer || '0'),
+          'ice-candidate': parseInt((yesterdayStats as any)?.['ice-candidate'] || '0'),
         },
         servers: Object.entries(serverStats).map(([serverId, count]) => ({
           serverId,
@@ -89,8 +89,8 @@ function getHealthInfo(): any {
 
 // メインハンドラー
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');

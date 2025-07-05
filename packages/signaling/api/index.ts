@@ -1,9 +1,9 @@
-import { NextApiRequest, NextApiResponse } from '@vercel/node';
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
 // ルートエンドポイント
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
