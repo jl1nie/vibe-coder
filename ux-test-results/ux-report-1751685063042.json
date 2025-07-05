@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-07-05T03:11:03.042Z",
+  "summary": {
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
+    "required": 2,
+    "requiredPassed": 1
+  },
+  "results": [
+    {
+      "name": "Basic Tests",
+      "command": "echo \"✅ Basic tests passed\"",
+      "success": true,
+      "code": 0,
+      "stdout": "✅ Basic tests passed\n",
+      "stderr": "",
+      "required": true
+    },
+    {
+      "name": "Playwright UX Tests",
+      "command": "npx playwright test test/ux-test.spec.ts",
+      "success": false,
+      "code": null,
+      "stdout": "",
+      "stderr": "",
+      "required": true
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "critical",
+      "message": "1 required tests failed. These must be fixed before deployment.",
+      "tests": [
+        "Playwright UX Tests"
+      ]
+    }
+  ]
+}

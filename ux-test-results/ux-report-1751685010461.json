@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-07-05T03:10:10.460Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "required": 1,
+    "requiredPassed": 0
+  },
+  "results": [
+    {
+      "name": "Unit Tests",
+      "command": "npm run test",
+      "success": false,
+      "code": 1,
+      "stdout": "\n> vibe-coder@0.1.0 test\n> vitest run\n\n",
+      "stderr": "\u001b[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.\u001b[39m\n MISSING DEPENDENCY  Cannot find dependency '@vitest/ui'\n\nError: Failed to load custom Reporter from @vitest/ui/reporter\n",
+      "required": true
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "critical",
+      "message": "1 required tests failed. These must be fixed before deployment.",
+      "tests": [
+        "Unit Tests"
+      ]
+    }
+  ]
+}
