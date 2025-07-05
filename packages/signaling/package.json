@@ -14,18 +14,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vercel/kv": "^1.0.1",
-    "@vercel/postgres": "^0.5.1",
-    "zod": "^3.22.4",
-    "jose": "^5.2.0"
+    "@vercel/kv": "catalog:",
+    "@vercel/postgres": "catalog:",
+    "zod": "catalog:",
+    "jose": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^20.11.17",
-    "@vercel/node": "^3.0.21",
-    "typescript": "^5.3.3",
-    "eslint": "^8.56.0",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "vitest": "^1.2.2"
+    "@types/node": "catalog:",
+    "@vercel/node": "catalog:",
+    "typescript": "catalog:",
+    "eslint": "catalog:",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "vitest": "catalog:"
   }
 }

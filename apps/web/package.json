@@ -21,13 +21,13 @@
     "@vibe-coder/shared": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "react-router-dom": "^6.22.0",
+    "react-router-dom": "catalog:",
     "clsx": "catalog:",
-    "lucide-react": "^0.356.0",
-    "framer-motion": "^11.0.8",
-    "react-use": "^17.5.0",
-    "workbox-window": "^7.0.0",
-    "idb": "^8.0.0"
+    "lucide-react": "catalog:",
+    "framer-motion": "catalog:",
+    "react-use": "catalog:",
+    "workbox-window": "catalog:",
+    "idb": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
@@ -36,14 +36,14 @@
     "@testing-library/react": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-pwa": "^0.19.8",
+    "vite-plugin-pwa": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "playwright": "catalog:",
     "tailwindcss": "catalog:",
     "@tailwindcss/forms": "catalog:",
-    "autoprefixer": "^10.4.18",
-    "postcss": "^8.4.35",
-    "serve": "^14.2.1"
+    "autoprefixer": "catalog:",
+    "postcss": "catalog:",
+    "serve": "catalog:"
   }
 }
