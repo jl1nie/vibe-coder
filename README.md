@@ -212,9 +212,34 @@ npm run test:accessibility
 ### ユーザテスト
 
 ```bash
+# ローカル環境でのユーザテスト（推奨）
+npm run test:local
+
+# ユーザーフィードバック収集
+npm run feedback
+
 # プレビュー環境でのユーザテスト
 npm run preview-ux
 ```
+
+#### 🧪 ローカルユーザーテスト手順
+
+1. **環境起動**:
+   ```bash
+   npm run test:local
+   ```
+
+2. **テスト実施**:
+   - Chrome で自動的に開く PWA または https://vibe-coder.space
+   - 表示される Server ID を PWA に入力
+   - 音声コマンドやクイックコマンドを試用
+
+3. **フィードバック収集**:
+   ```bash
+   npm run feedback
+   ```
+
+4. **テスト終了**: Ctrl+C でサービス停止
 
 ## 🔧 開発
 
