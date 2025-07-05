@@ -311,6 +311,22 @@ cd packages/signaling
 npm run deploy
 ```
 
+### 🔐 CI/CDシークレット（メンテナー用）
+
+GitHub Actionsで自動デプロイを行うには、以下のシークレットが必要：
+
+```bash
+# Docker Hub
+DOCKER_USERNAME=jl1nie
+DOCKER_PASSWORD=your-docker-token
+
+# Vercel
+VERCEL_TOKEN=your-vercel-token
+VERCEL_ORG_ID=your-org-id
+VERCEL_PWA_PROJECT_ID=pwa-project-id
+VERCEL_SIGNALING_PROJECT_ID=signaling-project-id
+```
+
 詳細は [DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) を参照
 
 ### 🔧 設定
