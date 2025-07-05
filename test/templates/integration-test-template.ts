@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { WebSocket } from 'ws';
+import React from 'react';
 
 // === API Integration Test Template ===
 describe('API Integration', () => {

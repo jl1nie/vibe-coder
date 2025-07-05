@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import React from 'react';
 
 // === Component Test Template ===
 describe('ComponentName', () => {
