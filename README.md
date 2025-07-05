@@ -29,21 +29,27 @@ graph TB
         Commands[クイックコマンド<br/>プレイリスト管理]
     end
     
-    subgraph "🌐 Signaling Server (Vercel)"
-        Signal[WebRTC橋渡し<br/>セッション管理]
+    subgraph "🌐 公式シグナリングサーバー"
+        SignalOfficial[signal.vibe-coder.space<br/>Vercel Edge Functions]
         Gist[GitHub Gist<br/>プレイリスト発見]
+        KV[(Vercel KV<br/>セッション管理)]
     end
     
-    subgraph "🖥️ Host (Docker)"
+    subgraph "🖥️ Host (ユーザー環境)"
         Claude[Claude Code統合<br/>セキュアプロセス実行]
-        WebRTC[WebRTC P2P<br/>NAT越え直接接続]
+        WebRTC[WebRTC P2P<br/>直接接続]
         Security[セキュリティ<br/>コマンド検証]
     end
     
-    PWA <==> Signal
-    Signal <==> Claude
-    PWA -.->|P2P接続後| Claude
+    PWA <==> SignalOfficial
+    SignalOfficial <==> Claude
+    PWA -.->|WebRTC P2P<br/>暗号化接続| Claude
+    SignalOfficial --> KV
     Gist --> Commands
+    
+    style SignalOfficial fill:#e1f5fe
+    style PWA fill:#f3e5f5
+    style Claude fill:#e8f5e8
 ```
 
 ## 🚀 クイックスタート
@@ -82,10 +88,18 @@ CLAUDE_API_KEY=sk-ant-xxxxx  # Anthropic APIキー
 # === GitHub統合設定 ===
 GITHUB_TOKEN=ghp_xxxxx       # GitHub Personal Access Token
 
+# === シグナリングサーバー設定 ===
+# 公式サーバーを利用（推奨・デフォルト）
+SIGNALING_SERVER_URL=https://signal.vibe-coder.space
+
 # === 開発環境設定 ===
 NODE_ENV=development
 DEBUG=vibe-coder:*
 ```
+
+**📡 シグナリングサーバーについて**:
+- **一般ユーザー**: 公式サーバー（`https://signal.vibe-coder.space`）を利用
+- **エンタープライズ**: 必要に応じて独自サーバーを構築
 
 ### 4️⃣ 全サービス起動
 
@@ -261,18 +275,36 @@ curl http://localhost:8080/api/connection/status
 
 ### 📦 本番デプロイ
 
-詳細は [DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) を参照
+**ユーザーが構築する必要があるのはホストサーバーのみです。**
 
+#### 🖥️ ホストサーバー（必須）
 ```bash
-# 本番ビルド
-npm run build
-
-# Docker イメージビルド
-npm run docker:build
-
-# Vercel デプロイ
-npm run deploy:vercel
+# Docker でホストサーバーを起動
+./scripts/docker-build.sh
+docker run -d \
+  -p 8080:8080 \
+  -e CLAUDE_API_KEY=your-key \
+  -e SIGNALING_SERVER_URL=https://signal.vibe-coder.space \
+  vibe-coder/host
 ```
+
+#### 📱 PWA（オプション・カスタマイズ時）
+```bash
+# Vercel にPWAをデプロイ（カスタマイズする場合のみ）
+npm run deploy:pwa
+```
+
+#### 📡 シグナリングサーバー（不要）
+**一般ユーザーは公式サーバー（`https://signal.vibe-coder.space`）を利用するため、独自構築は不要です。**
+
+エンタープライズで独自構築が必要な場合のみ：
+```bash
+# カスタムシグナリングサーバーのデプロイ
+cd packages/signaling
+npm run deploy
+```
+
+詳細は [DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) を参照
 
 ### 🔧 設定
 

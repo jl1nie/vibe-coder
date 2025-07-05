@@ -1,10 +1,32 @@
-# Vibe Coder Signaling Server
+# 🌐 Vibe Coder シグナリングサーバー
 
-WebRTC シグナリングとプレイリスト発見サービス for Vibe Coder
+## 📍 サーバー利用方法
 
-## 🌟 概要
+### 🎯 一般ユーザー（推奨）
 
-Vibe Coder Signaling Server は Vercel Edge Functions で動作する軽量なシグナリングサーバーです。
+**公式シグナリングサーバーを利用**
+- **URL**: `https://signal.vibe-coder.space`
+- **設定**: 不要（デフォルト設定）
+- **料金**: 完全無料
+- **制限**: 個人利用は無制限
+
+```bash
+# .env.local（設定不要・デフォルト）
+SIGNALING_SERVER_URL=https://signal.vibe-coder.space
+```
+
+### 🏢 エンタープライズ・カスタム運用
+
+独自のシグナリングサーバーが必要な場合のみ構築：
+- プライベートネットワーク要件
+- 企業セキュリティポリシー
+- カスタム認証システム統合
+
+---
+
+## 🌟 公式シグナリングサーバー仕様
+
+Vibe Coder の公式シグナリングサーバーは Vercel Edge Functions で動作し、世界中で高可用性を提供します。
 
 ### 主要機能
 
