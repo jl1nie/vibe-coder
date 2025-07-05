@@ -6,8 +6,7 @@
   "author": "Vibe Coder Team",
   "license": "MIT",
   "scripts": {
-    "build": "echo 'Build complete'",
-    "dev": "echo 'Development server'",
+    "vibe-coder": "./scripts/vibe-coder.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run packages/**/*.test.ts apps/**/*.test.tsx",
@@ -16,14 +15,14 @@
     "test:accessibility": "node test/accessibility-audit.js",
     "test:visual": "playwright test test/visual-regression.spec.ts",
     "test:ux-suite": "node test/ux-test-runner.js",
-    "vibe-coder": "./scripts/local-server.sh start",
-    "terminal": "./scripts/local-server.sh start pwa",
     "preview-ux": "node test/preview-ux-test.js",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf node_modules dist coverage test-results"
+    "clean": "rm -rf node_modules dist coverage test-results",
+    "docker:build": "./scripts/docker-build.sh",
+    "docker:push": "./scripts/docker-push.sh"
   },
   "dependencies": {
     "clsx": "^2.1.0",

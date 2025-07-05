@@ -101,28 +101,24 @@ DEBUG=vibe-coder:*
 - **一般ユーザー**: 公式サーバー（`https://signal.vibe-coder.space`）を利用
 - **エンタープライズ**: 必要に応じて独自サーバーを構築
 
-### 4️⃣ 全サービス起動
+### 4️⃣ Vibe Coder の起動
 
 ```bash
-# すべてのサービス（PWA + ホストサーバー）を起動
+# Vibe Coder を起動（公式Dockerイメージを自動利用）
 npm run vibe-coder
 ```
 
-または個別起動：
-
-```bash
-# PWAのみ起動
-npm run terminal
-
-# ホストサーバーのみ起動
-npm run host
-```
+**これだけで完了！** 🎉
+- 公式Dockerイメージを自動でプル・起動
+- ホストサーバーが http://localhost:8080 で利用可能
+- PWAは https://vibe-coder.space でアクセス
 
 ### 5️⃣ アクセス
 
-- **PWA (クライアント)**: http://localhost:3000
+- **PWA**: https://vibe-coder.space （推奨）
 - **ホストサーバー**: http://localhost:8080
-- **API文書**: http://localhost:8080/api-docs
+- **API**: http://localhost:8080/api-docs
+- **ヘルス**: http://localhost:8080/health
 
 ## 📱 使い方
 
@@ -241,21 +237,23 @@ vibe-coder/
 ### 🛠️ 開発コマンド
 
 ```bash
-# 開発サーバー起動
-npm run dev
+# Vibe Coder 起動・操作
+npm run vibe-coder          # 起動
+npm run vibe-coder stop     # 停止
+npm run vibe-coder restart  # 再起動
+npm run vibe-coder status   # 状態確認
+npm run vibe-coder logs     # ログ確認
+npm run vibe-coder build    # ローカルビルド
 
-# リント・フォーマット
-npm run lint
-npm run format
+# 開発・テスト
+npm run lint                # ESLint
+npm run format              # Prettier
+npm run typecheck           # TypeScript
+npm test                    # Unit tests
 
-# 型チェック
-npm run typecheck
-
-# ドキュメント検証
-./scripts/doc-validator.sh validate
-
-# Docker ビルド
-./scripts/docker-build.sh
+# Docker (上級者・メンテナー用)
+npm run docker:build        # ローカルイメージビルド
+npm run docker:push         # Docker Hub プッシュ（メンテナー専用）
 ```
 
 ### 🔍 デバッグ
@@ -263,11 +261,16 @@ npm run typecheck
 ```bash
 # デバッグログの有効化
 export DEBUG=vibe-coder:*
+npm run vibe-coder restart
 
-# ヘルスチェック
+# サービス状態確認
+npm run vibe-coder status
+
+# ログ確認
+npm run vibe-coder logs
+
+# API確認
 curl http://localhost:8080/health
-
-# WebRTC接続状態の確認
 curl http://localhost:8080/api/connection/status
 ```
 
@@ -279,13 +282,17 @@ curl http://localhost:8080/api/connection/status
 
 #### 🖥️ ホストサーバー（必須）
 ```bash
-# Docker でホストサーバーを起動
-./scripts/docker-build.sh
+# 公式Dockerイメージで起動（推奨）
 docker run -d \
+  --name vibe-coder-host \
   -p 8080:8080 \
   -e CLAUDE_API_KEY=your-key \
-  -e SIGNALING_SERVER_URL=https://signal.vibe-coder.space \
-  vibe-coder/host
+  -v $(pwd)/workspace:/app/workspace \
+  --restart unless-stopped \
+  jl1nie/vibe-coder:latest
+
+# または統合コマンドで起動
+npm run vibe-coder
 ```
 
 #### 📱 PWA（オプション・カスタマイズ時）
