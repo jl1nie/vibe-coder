@@ -39,7 +39,7 @@ describe('Vibe Coder Unit Tests', () => {
       }
 
       // 安全なコマンド
-      expect(() => validateCommand('claude-code "create a component"')).not.toThrow();
+      expect(() => validateCommand('claude-code create a component')).not.toThrow();
       expect(() => validateCommand('npm install')).not.toThrow();
       expect(() => validateCommand('git status')).not.toThrow();
 
@@ -54,7 +54,7 @@ describe('Vibe Coder Unit Tests', () => {
       expect(() => validateCommand(longCommand)).toThrow(/Command too long/);
 
       // 非ASCII文字
-      expect(() => validateCommand('claude-code "テストコマンド"')).toThrow(/Non-ASCII characters not allowed/);
+      expect(() => validateCommand('claude-code テストコマンド')).toThrow(/Non-ASCII characters not allowed/);
     });
   });
 
@@ -68,9 +68,9 @@ describe('Vibe Coder Unit Tests', () => {
     }
 
     it('コマンドが正しく正規化される', () => {
-      expect(normalizeCommand('  claude-code   "test"  ')).toBe('claude-code "test"');
-      expect(normalizeCommand('claude-code "test"')).toBe('claude-code "test"');
-      expect(normalizeCommand('claude-code "test"')).toBe('claude-code "test"');
+      expect(normalizeCommand('  claude-code   test  ')).toBe('claude-code test');
+      expect(normalizeCommand('claude-code test')).toBe('claude-code test');
+      expect(normalizeCommand('claude-code test')).toBe('claude-code test');
     });
   });
 
@@ -249,7 +249,7 @@ describe('Vibe Coder Unit Tests', () => {
           {
             icon: '🔥',
             label: 'Test Command',
-            command: 'claude-code "test"',
+            command: 'claude-code test',
             description: 'A test command',
             category: 'test',
           },
@@ -322,7 +322,7 @@ export function createMockCommand(overrides = {}) {
   return {
     icon: '🔥',
     label: 'Test Command',
-    command: 'claude-code "test command"',
+    command: 'claude-code test command',
     description: 'A test command',
     category: 'test',
     ...overrides,

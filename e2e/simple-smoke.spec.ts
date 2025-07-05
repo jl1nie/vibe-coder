@@ -66,11 +66,11 @@ test.describe('Vibe Coder Smoke Tests', () => {
             </div>
 
             <div class="quick-commands">
-                <button class="command-btn" data-command="claude-code 'add authentication to the app'">🔐 Login</button>
-                <button class="command-btn" data-command="claude-code 'fix the reported bug'">🐛 Fix Bug</button>
-                <button class="command-btn" data-command="claude-code 'improve the UI styling'">🎨 Style</button>
-                <button class="command-btn" data-command="claude-code 'create a new component'">⚛️ Component</button>
-                <button class="command-btn" data-command="claude-code 'write unit tests'">🧪 Test</button>
+                <button class="command-btn" data-command="claude-code add authentication to the app">🔐 Login</button>
+                <button class="command-btn" data-command="claude-code fix the reported bug">🐛 Fix Bug</button>
+                <button class="command-btn" data-command="claude-code improve the UI styling">🎨 Style</button>
+                <button class="command-btn" data-command="claude-code create a new component">⚛️ Component</button>
+                <button class="command-btn" data-command="claude-code write unit tests">🧪 Test</button>
             </div>
         </div>
     </div>
@@ -138,7 +138,7 @@ test.describe('Vibe Coder Smoke Tests', () => {
                     'write integration tests'
                 ];
                 const randomCommand = mockCommands[Math.floor(Math.random() * mockCommands.length)];
-                commandInput.value = 'claude-code "' + randomCommand + '"';
+                commandInput.value = 'claude-code ' + randomCommand;
                 voiceBtn.textContent = '🎤 Voice Input';
                 addTerminalLine('🎤 Voice recognized: ' + randomCommand);
             }, 2000);
@@ -261,11 +261,11 @@ test.describe('Vibe Coder Smoke Tests', () => {
             </div>
 
             <div class="quick-commands" role="list" aria-label="quick commands">
-                <button class="command-btn" data-command="claude-code 'add authentication to the app'" role="button" aria-label="Login: add authentication">🔐 Login</button>
-                <button class="command-btn" data-command="claude-code 'fix the reported bug'" role="button" aria-label="Fix Bug: debug issues">🐛 Fix Bug</button>
-                <button class="command-btn" data-command="claude-code 'improve the UI styling'" role="button" aria-label="Style: enhance UI design">🎨 Style</button>
-                <button class="command-btn" data-command="claude-code 'create a new component'" role="button" aria-label="Component: create new component">⚛️ Component</button>
-                <button class="command-btn" data-command="claude-code 'write unit tests'" role="button" aria-label="Test: write unit tests">🧪 Test</button>
+                <button class="command-btn" data-command="claude-code add authentication to the app" role="button" aria-label="Login: add authentication">🔐 Login</button>
+                <button class="command-btn" data-command="claude-code fix the reported bug" role="button" aria-label="Fix Bug: debug issues">🐛 Fix Bug</button>
+                <button class="command-btn" data-command="claude-code improve the UI styling" role="button" aria-label="Style: enhance UI design">🎨 Style</button>
+                <button class="command-btn" data-command="claude-code create a new component" role="button" aria-label="Component: create new component">⚛️ Component</button>
+                <button class="command-btn" data-command="claude-code write unit tests" role="button" aria-label="Test: write unit tests">🧪 Test</button>
             </div>
         </div>
     </div>
@@ -333,7 +333,7 @@ test.describe('Vibe Coder Smoke Tests', () => {
                     'write integration tests'
                 ];
                 const randomCommand = mockCommands[Math.floor(Math.random() * mockCommands.length)];
-                commandInput.value = 'claude-code "' + randomCommand + '"';
+                commandInput.value = 'claude-code ' + randomCommand;
                 voiceBtn.textContent = '🎤 Voice Input';
                 addTerminalLine('🎤 Voice recognized: ' + randomCommand);
             }, 2000);
@@ -452,11 +452,11 @@ test.describe('Vibe Coder Smoke Tests', () => {
             </div>
 
             <div class="quick-commands" role="list" aria-label="quick commands">
-                <button class="command-btn" data-command="claude-code 'add authentication to the app'" role="button" aria-label="Login: add authentication">🔐 Login</button>
-                <button class="command-btn" data-command="claude-code 'fix the reported bug'" role="button" aria-label="Fix Bug: debug issues">🐛 Fix Bug</button>
-                <button class="command-btn" data-command="claude-code 'improve the UI styling'" role="button" aria-label="Style: enhance UI design">🎨 Style</button>
-                <button class="command-btn" data-command="claude-code 'create a new component'" role="button" aria-label="Component: create new component">⚛️ Component</button>
-                <button class="command-btn" data-command="claude-code 'write unit tests'" role="button" aria-label="Test: write unit tests">🧪 Test</button>
+                <button class="command-btn" data-command="claude-code add authentication to the app" role="button" aria-label="Login: add authentication">🔐 Login</button>
+                <button class="command-btn" data-command="claude-code fix the reported bug" role="button" aria-label="Fix Bug: debug issues">🐛 Fix Bug</button>
+                <button class="command-btn" data-command="claude-code improve the UI styling" role="button" aria-label="Style: enhance UI design">🎨 Style</button>
+                <button class="command-btn" data-command="claude-code create a new component" role="button" aria-label="Component: create new component">⚛️ Component</button>
+                <button class="command-btn" data-command="claude-code write unit tests" role="button" aria-label="Test: write unit tests">🧪 Test</button>
             </div>
         </div>
     </div>
@@ -496,7 +496,7 @@ test.describe('Vibe Coder Smoke Tests', () => {
                     'write integration tests'
                 ];
                 const randomCommand = mockCommands[Math.floor(Math.random() * mockCommands.length)];
-                commandInput.value = 'claude-code "' + randomCommand + '"';
+                commandInput.value = 'claude-code ' + randomCommand;
                 voiceBtn.textContent = '🎤 Voice Input';
                 addTerminalLine('🎤 Voice recognized: ' + randomCommand);
             }, 1000);
@@ -543,7 +543,7 @@ test.describe('Vibe Coder Smoke Tests', () => {
     await page.getByRole('button', { name: /login/i }).click();
     
     // Verify command execution
-    await expect(page.getByText('claude-code \'add authentication to the app\'')).toBeVisible();
+    await expect(page.getByText('claude-code add authentication to the app')).toBeVisible();
     await expect(page.getByText('Claude Code analyzing')).toBeVisible();
     await expect(page.getByText(/Task completed|Files created|Implementation ready|Performance optimizations|Security measures/)).toBeVisible({ timeout: 2000 });
   });
@@ -616,7 +616,7 @@ test.describe('Vibe Coder Smoke Tests', () => {
                     'write integration tests'
                 ];
                 const randomCommand = mockCommands[Math.floor(Math.random() * mockCommands.length)];
-                commandInput.value = 'claude-code "' + randomCommand + '"';
+                commandInput.value = 'claude-code ' + randomCommand;
                 voiceBtn.textContent = '🎤 Voice Input';
                 addTerminalLine('🎤 Voice recognized: ' + randomCommand);
             }, 500);

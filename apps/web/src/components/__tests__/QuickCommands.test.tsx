@@ -13,21 +13,21 @@ const mockCommands = [
   {
     icon: '🔐',
     label: 'Login',
-    command: 'claude-code "add authentication to the app"',
+    command: 'claude-code add authentication to the app',
     description: 'Add login functionality',
     category: 'auth',
   },
   {
     icon: '🐛',
     label: 'Fix Bug',
-    command: 'claude-code "fix the reported bug"',
+    command: 'claude-code fix the reported bug',
     description: 'Debug and fix issues',
     category: 'debug',
   },
   {
     icon: '🎨',
     label: 'Style',
-    command: 'claude-code "improve the UI styling"',
+    command: 'claude-code improve the UI styling',
     description: 'Enhance visual design',
     category: 'ui',
   },
@@ -219,7 +219,7 @@ describe('QuickCommands', () => {
       const manyCommands = Array.from({ length: 20 }, (_, i) => ({
         icon: `🔥`,
         label: `Command ${i + 1}`,
-        command: `claude-code "command ${i + 1}"`,
+        command: `claude-code command ${i + 1}`,
         description: `Description ${i + 1}`,
         category: 'test',
       }));
@@ -283,7 +283,7 @@ describe('QuickCommands', () => {
       const manyCommands = Array.from({ length: 100 }, (_, i) => ({
         icon: `🔥`,
         label: `Command ${i + 1}`,
-        command: `claude-code "command ${i + 1}"`,
+        command: `claude-code command ${i + 1}`,
         description: `Description ${i + 1}`,
         category: 'performance-test',
       }));
@@ -363,7 +363,7 @@ describe('QuickCommands', () => {
       const newCommand = {
         icon: '🚀',
         label: 'Deploy',
-        command: 'claude-code "deploy the application"',
+        command: 'claude-code deploy the application',
         description: 'Deploy to production',
         category: 'deployment',
       };

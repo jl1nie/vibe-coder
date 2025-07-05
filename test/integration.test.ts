@@ -28,7 +28,7 @@ describe('Vibe Coder Integration Tests', () => {
     it('セッション作成からコマンド実行までの完全フロー', async () => {
       // Setup
       const sessionId = 'integration-test-session';
-      const command = 'claude-code "create a test component"';
+      const command = 'claude-code create a test component';
       
       mockSessionManager.createSession.mockResolvedValue({
         id: sessionId,
@@ -188,7 +188,7 @@ describe('Vibe Coder Integration Tests', () => {
           {
             icon: '🎨',
             label: 'Polish',
-            command: 'claude-code "polish the UI"',
+            command: 'claude-code polish the UI',
             description: 'Enhance UI',
             category: 'ui',
           },
@@ -228,7 +228,7 @@ describe('Vibe Coder Integration Tests', () => {
           {
             icon: '🔥',
             label: 'Test',
-            command: 'claude-code "run tests"',
+            command: 'claude-code run tests',
             description: 'Run tests',
             category: 'testing',
           },
@@ -237,7 +237,7 @@ describe('Vibe Coder Integration Tests', () => {
 
       mockStorageService.load.mockResolvedValue(storedPlaylist);
       mockClaudeService.executeCommand.mockResolvedValue({
-        command: 'claude-code "run tests"',
+        command: 'claude-code run tests',
         exitCode: 0,
         output: ['Tests passed'],
       });
@@ -251,7 +251,7 @@ describe('Vibe Coder Integration Tests', () => {
 
       // Verify
       expect(mockStorageService.load).toHaveBeenCalledWith('playlists');
-      expect(mockClaudeService.executeCommand).toHaveBeenCalledWith('test-session', 'claude-code "run tests"');
+      expect(mockClaudeService.executeCommand).toHaveBeenCalledWith('test-session', 'claude-code run tests');
       expect(result.exitCode).toBe(0);
     });
   });
@@ -280,7 +280,7 @@ describe('Vibe Coder Integration Tests', () => {
       // Setup
       const rawSpeechResult = 'please create a user profile component';
       const normalizedText = 'create a user profile component';
-      const extractedCommand = 'claude-code "create a user profile component"';
+      const extractedCommand = 'claude-code create a user profile component';
 
       mockVoiceProcessor.normalizeText.mockReturnValue(normalizedText);
       mockVoiceProcessor.extractCommand.mockReturnValue(extractedCommand);

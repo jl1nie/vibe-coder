@@ -4,7 +4,7 @@
   "private": true,
   "description": "スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境",
   "author": "Vibe Coder Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "vibe-coder": "./scripts/vibe-coder.sh",
     "test": "vitest run",

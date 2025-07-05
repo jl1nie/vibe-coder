@@ -475,8 +475,8 @@ import { QuickCommands } from '../src/components/QuickCommands';
 
 describe('QuickCommands', () => {
   const mockCommands = [
-    { icon: '🔐', label: 'Login', command: 'claude-code "add authentication"' },
-    { icon: '🐛', label: 'Fix Bug', command: 'claude-code "fix the bug"' }
+    { icon: '🔐', label: 'Login', command: 'claude-code add authentication' },
+    { icon: '🐛', label: 'Fix Bug', command: 'claude-code fix the bug' }
   ];
 
   it('renders command buttons correctly', () => {
@@ -493,7 +493,7 @@ describe('QuickCommands', () => {
     fireEvent.click(screen.getByRole('button', { name: /Login/ }));
    
     await waitFor(() => {
-      expect(mockExecute).toHaveBeenCalledWith('claude-code "add authentication"');
+      expect(mockExecute).toHaveBeenCalledWith('claude-code add authentication');
     });
   });
 
@@ -541,11 +541,11 @@ describe('ClaudeSession', () => {
       const mockCallback = jest.fn();
      
       // 最初のコマンドを実行開始
-      const promise1 = session.executeCommand('claude-code "test1"', mockCallback);
+      const promise1 = session.executeCommand('claude-code test1', mockCallback);
      
       // 2番目のコマンドは拒否されるべき
       await expect(
-        session.executeCommand('claude-code "test2"', mockCallback)
+        session.executeCommand('claude-code test2', mockCallback)
       ).rejects.toThrow('Another command is already executing');
      
       session.interrupt(); // クリーンアップ
@@ -554,7 +554,7 @@ describe('ClaudeSession', () => {
 
   describe('validateCommand', () => {
     it('allows safe commands', () => {
-      expect(() => validateCommand('claude-code "add login page"')).not.toThrow();
+      expect(() => validateCommand('claude-code add login page')).not.toThrow();
     });
 
     it('blocks dangerous commands', () => {
@@ -571,7 +571,7 @@ describe('ClaudeSession', () => {
     });
 
     it('enforces length limits', () => {
-      const longCommand = 'claude-code "' + 'a'.repeat(2000) + '"';
+      const longCommand = 'claude-code ' + 'a'.repeat(2000);
       expect(() => validateCommand(longCommand)).toThrow('Command too long');
     });
   });
@@ -689,7 +689,7 @@ test.describe('Vibe Coder E2E', () => {
     await page.getByRole('button', { name: 'Login' }).click();
    
     // ターミナル出力を確認
-    await expect(page.getByText('claude-code "add authentication"')).toBeVisible();
+    await expect(page.getByText('claude-code add authentication')).toBeVisible();
     await expect(page.getByText('🤖 Claude Code analyzing...')).toBeVisible();
    
     // 実行完了を待機
@@ -703,7 +703,7 @@ test.describe('Vibe Coder E2E', () => {
     await page.getByRole('button', { name: 'Execute' }).click();
    
     // 実行結果を確認
-    await expect(page.getByText('claude-code "add a contact form"')).toBeVisible();
+    await expect(page.getByText('claude-code add a contact form')).toBeVisible();
   });
 
   test('playlist management workflow', async ({ page }) => {

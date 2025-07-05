@@ -62,7 +62,7 @@ describe('API Integration', () => {
     it('POST /api/sessions/:id/execute - コマンド実行フロー', async () => {
       // Arrange - 事前にセッションを作成
       const sessionId = await createTestSession();
-      const command = 'claude-code "create a hello world function"';
+      const command = 'claude-code create a hello world function';
 
       // Act
       const response = await request(app)

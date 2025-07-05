@@ -2,7 +2,7 @@
 
 **スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue)](https://www.typescriptlang.org/)
 [![PWA](https://img.shields.io/badge/PWA-Ready-orange)](https://web.dev/progressive-web-apps/)
@@ -145,8 +145,8 @@ npm run vibe-coder
 
 | アイコン | 機能 | コマンド例 |
 |---------|------|----------|
-| 🔐 | ログイン機能 | `claude-code "add authentication"` |
-| 🐛 | バグ修正 | `claude-code "fix the bug"` |
+| 🔐 | ログイン機能 | `claude-code add authentication` |
+| 🐛 | バグ修正 | `claude-code fix the bug` |
 | 🧪 | テスト実行 | `npm test` |
 | 🚀 | デプロイ | `npm run deploy` |
 | 📦 | ビルド | `npm run build` |
@@ -169,13 +169,13 @@ npm run vibe-coder
     {
       "icon": "🎨",
       "label": "UI Polish",
-      "command": "claude-code \"improve the UI design\"",
+      "command": "claude-code improve the UI design",
       "description": "UIデザインの改善"
     },
     {
       "icon": "🔍",
       "label": "Code Review", 
-      "command": "claude-code \"review this code\"",
+      "command": "claude-code review this code",
       "description": "コードレビューの実行"
     }
   ]
@@ -418,7 +418,7 @@ VERCEL_SIGNALING_PROJECT_ID=signaling-project-id
 
 ## 📄 ライセンス
 
-このプロジェクトは MIT ライセンスの下で公開されています。詳細は [LICENSE](./LICENSE) を参照してください。
+このプロジェクトは Apache 2.0 ライセンスの下で公開されています。詳細は [LICENSE](./LICENSE) を参照してください。
 
 ## 🙏 謝辞
 

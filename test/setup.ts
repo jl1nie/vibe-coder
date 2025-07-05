@@ -224,7 +224,7 @@ global.console = {
 export const createMockCommand = (overrides = {}) => ({
   icon: '🔥',
   label: 'Test Command',
-  command: 'claude-code "test command"',
+  command: 'claude-code test command',
   description: 'A test command',
   category: 'test',
   ...overrides,

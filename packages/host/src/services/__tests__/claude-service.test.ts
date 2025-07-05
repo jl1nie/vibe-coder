@@ -165,7 +165,7 @@ describe('ClaudeService', () => {
     });
 
     it('有効なコマンドが正常に実行される', async () => {
-      const command = 'claude-code "create a hello world function"';
+      const command = 'claude-code create a hello world function';
       
       // Mock successful execution
       setTimeout(() => {
@@ -217,7 +217,7 @@ describe('ClaudeService', () => {
     });
 
     it('ASCII以外の文字がブロックされる', async () => {
-      const nonAsciiCommand = 'claude-code "テストコマンド"';
+      const nonAsciiCommand = 'claude-code テストコマンド';
       
       await expect(claudeService.executeCommand('test-session', nonAsciiCommand))
         .rejects.toThrow(/Non-ASCII characters not allowed/);

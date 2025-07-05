@@ -272,7 +272,7 @@ async function startMockServer() {
         <main class="main-container" data-testid="main-container" role="main">
             <div class="terminal" data-testid="terminal" role="region" aria-label="ターミナル出力">
                 <div data-testid="terminal-output">
-                    $ claude-code "Welcome to Vibe Coder!"<br>
+                    $ claude-code Welcome to Vibe Coder!<br>
                     🤖 Claude Code analyzing your request...<br>
                     ✅ Ready for commands!
                 </div>

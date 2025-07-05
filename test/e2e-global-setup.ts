@@ -61,21 +61,21 @@ async function prepareTestData(): Promise<void> {
         {
           icon: '🎨',
           label: 'Polish',
-          command: 'claude-code "polish the UI and improve user experience"',
+          command: 'claude-code polish the UI and improve user experience',
           description: 'Enhance visual design and UX',
           category: 'ui',
         },
         {
           icon: '📱',
           label: 'Responsive',
-          command: 'claude-code "make the component responsive"',
+          command: 'claude-code make the component responsive',
           description: 'Add responsive design',
           category: 'ui',
         },
         {
           icon: '⚡',
           label: 'Optimize',
-          command: 'claude-code "optimize component performance"',
+          command: 'claude-code optimize component performance',
           description: 'Improve performance',
           category: 'performance',
         },
@@ -100,21 +100,21 @@ async function prepareTestData(): Promise<void> {
         {
           icon: '🔐',
           label: 'Auth',
-          command: 'claude-code "implement authentication and authorization"',
+          command: 'claude-code implement authentication and authorization',
           description: 'Add auth system',
           category: 'security',
         },
         {
           icon: '💾',
           label: 'Database',
-          command: 'claude-code "design and implement database schema"',
+          command: 'claude-code design and implement database schema',
           description: 'Setup database',
           category: 'database',
         },
         {
           icon: '🚀',
           label: 'Deploy',
-          command: 'claude-code "prepare application for deployment"',
+          command: 'claude-code prepare application for deployment',
           description: 'Deployment setup',
           category: 'devops',
         },
@@ -370,21 +370,21 @@ async function setupBrowserStorage(): Promise<void> {
           {
             icon: '🔐',
             label: 'Login',
-            command: 'claude-code "add authentication to the app"',
+            command: 'claude-code add authentication to the app',
             description: 'Add login functionality',
             category: 'auth',
           },
           {
             icon: '🐛',
             label: 'Fix Bug',
-            command: 'claude-code "fix the reported bug"',
+            command: 'claude-code fix the reported bug',
             description: 'Debug and fix issues',
             category: 'debug',
           },
           {
             icon: '🎨',
             label: 'Style',
-            command: 'claude-code "improve the UI styling"',
+            command: 'claude-code improve the UI styling',
             description: 'Enhance visual design',
             category: 'ui',
           },
@@ -394,11 +394,11 @@ async function setupBrowserStorage(): Promise<void> {
     
     // Mock command history
     localStorage.setItem('vibe-coder-command-history', JSON.stringify([
-      'claude-code "create a user profile component"',
-      'claude-code "add error handling to the API"',
-      'claude-code "write unit tests for the service"',
-      'claude-code "optimize the database queries"',
-      'claude-code "implement responsive design"',
+      'claude-code create a user profile component',
+      'claude-code add error handling to the API',
+      'claude-code write unit tests for the service',
+      'claude-code optimize the database queries',
+      'claude-code implement responsive design',
     ]));
     
     // Set test mode flag

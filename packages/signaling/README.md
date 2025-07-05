@@ -102,7 +102,7 @@ GITHUB_TOKEN=ghp_your_github_token
         {
           "icon": "🎨",
           "label": "Style Fix",
-          "command": "claude-code \"fix CSS styling issues\"",
+          "command": "claude-code fix CSS styling issues",
           "description": "CSS スタイリングの問題を修正"
         }
       ]
@@ -222,7 +222,7 @@ curl -X POST http://localhost:3000/api/signal \
     {
       "icon": "🚀",
       "label": "Start Dev",
-      "command": "claude-code \"start development server\"",
+      "command": "claude-code start development server",
       "description": "開発サーバーを起動",
       "category": "dev"
     }
