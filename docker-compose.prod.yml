@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  vibe-coder-host:
+    image: jl1nie/vibe-coder:v0.1.0-beta
+    container_name: vibe-coder-host-prod
+    ports:
+      - "8080:8080"
+    volumes:
+      # 本番では適切なパーミッション設定が必要
+      - ./workspace:/app/workspace
+      - ~/.claude:/app/.claude:ro
+    environment:
+      - NODE_ENV=production
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SIGNALING_SERVER_URL=${SIGNALING_SERVER_URL:-https://vibe-coder.space/api/signal}
+      - MAX_CONCURRENT_SESSIONS=${MAX_CONCURRENT_SESSIONS:-50}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-60000}
+      - ENABLE_SECURITY=${ENABLE_SECURITY:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # セキュリティ設定
+    user: "${HOST_UID:-1001}:${HOST_GID:-1001}"
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

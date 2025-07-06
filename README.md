@@ -5,51 +5,30 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue)](https://www.typescriptlang.org/)
-[![PWA](https://img.shields.io/badge/PWA-Ready-orange)](https://web.dev/progressive-web-apps/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://www.docker.com/)
 
 ## 🌟 概要
 
-Vibe Coder は、スマートフォンから Claude Code を瞬時に実行できる革新的な開発ツールです。WebRTC P2P 通信により、どこからでも安全に自宅の開発環境にアクセスし、音声コマンドやワンタップ操作で効率的な開発が可能です。
+Vibe Coder は、スマートフォンから Claude Code を実行できる開発ツールです。8桁キー認証とTOTP 2FA認証により、安全に自宅の開発環境にアクセスできます。
 
-### 💡 主要な価値提案
+### 💡 主要機能
 
-- **🔒 完全プライベート**: WebRTC P2P通信でコードが外部に漏れない
-- **📱 モバイルファースト**: スマホに最適化された直感的なUI
-- **🎤 音声操作**: 自然言語での音声コマンド入力
-- **⚡ ワンタップ実行**: よく使うコマンドをアイコンで瞬時実行
-- **🎵 プレイリスト**: コマンドセットの作成・共有・管理
+- **🔒 セキュア認証**: 8桁キー + TOTP 2FA による多層認証
+- **📱 REST API**: Claude Code実行のための完備されたAPI
+- **🐳 Docker化**: 簡単デプロイメントと環境分離
+- **⚡ 軽量**: メモリ使用量150MB以下の高効率設計
+- **🔧 本番対応**: プロダクション環境での安定稼働
 
 ## 🏗️ アーキテクチャ
 
-```mermaid
-graph TB
-    subgraph "📱 Client (PWA)"
-        PWA[React PWA<br/>モバイル最適化UI]
-        Voice[音声認識<br/>Web Speech API]
-        Commands[クイックコマンド<br/>プレイリスト管理]
-    end
-    
-    subgraph "🌐 公式シグナリングサーバー"
-        SignalOfficial[signal.vibe-coder.space<br/>Vercel Edge Functions]
-        Gist[GitHub Gist<br/>プレイリスト発見]
-        KV[(Vercel KV<br/>セッション管理)]
-    end
-    
-    subgraph "🖥️ Host (ユーザー環境)"
-        Claude[Claude Code統合<br/>セキュアプロセス実行]
-        WebRTC[WebRTC P2P<br/>直接接続]
-        Security[セキュリティ<br/>コマンド検証]
-    end
-    
-    PWA <==> SignalOfficial
-    SignalOfficial <==> Claude
-    PWA -.->|WebRTC P2P<br/>暗号化接続| Claude
-    SignalOfficial --> KV
-    Gist --> Commands
-    
-    style SignalOfficial fill:#e1f5fe
-    style PWA fill:#f3e5f5
-    style Claude fill:#e8f5e8
+```
+┌─────────────────┐    ┌──────────────────────┐    ┌─────────────────┐
+│   Client        │◄──►│ Vibe Coder Host      │◄──►│   Claude Code   │
+│                 │    │ (Docker Container)   │    │                 │
+│ REST API Client │    │ • 8桁キー認証       │    │ • コマンド実行   │
+│ • TOTP 2FA      │    │ • TOTP 2FA          │    │ • 出力取得      │
+│ • JWT認証       │    │ • JWT発行           │    │ • エラー処理    │
+└─────────────────┘    └──────────────────────┘    └─────────────────┘
 ```
 
 ## 🚀 クイックスタート
@@ -57,8 +36,8 @@ graph TB
 ### 📋 必要な環境
 
 - **Node.js**: 20.0.0以上
-- **Docker**: 最新版 (ホストサーバー用)
-- **Claude API Key**: Anthropic アカウントが必要
+- **Docker**: 最新版
+- **pnpm**: パッケージマネージャー
 
 ### 1️⃣ リポジトリのクローン
 
@@ -77,10 +56,10 @@ pnpm install
 
 ```bash
 # Claude Code CLIをインストール
-pnpm install -g @anthropic-ai/claude-code
+npm install -g @anthropic-ai/claude-code
 
-# Claude Codeにログイン（APIキーを設定）
-claude-code auth login
+# Claude Codeにログイン
+claude auth login
 
 # 設定を確認
 ls -la ~/.claude/
@@ -95,21 +74,20 @@ cp .env.example .env
 `.env` を編集して必要な値を設定：
 
 ```bash
-# === セッション暗号化設定（必須） ===
-# 32文字以上のランダム文字列を生成
-SESSION_SECRET=$(openssl rand -hex 32)
+# セッション暗号化設定（必須）
+SESSION_SECRET=development-secret-key-for-testing-minimum-32-characters-required
 
-# === シグナリングサーバー設定 ===
-# 公式サーバーを利用（推奨・デフォルト）
-SIGNALING_SERVER_URL=https://signal.vibe-coder.space
+# シグナリングサーバー設定
+SIGNALING_SERVER_URL=https://vibe-coder.space/api/signal
 
-# === オプション設定 ===
-# DEBUG=vibe-coder:*  # デバッグログ（開発時のみ）
+# オプション設定
+ENABLE_SECURITY=false
+LOG_LEVEL=debug
+
+# Docker UID/GID設定（自動検出される）
+HOST_UID=1000
+HOST_GID=1000
 ```
-
-**📡 シグナリングサーバーについて**:
-- **一般ユーザー**: 公式サーバー（`https://signal.vibe-coder.space`）を利用
-- **エンタープライズ**: 必要に応じて独自サーバーを構築
 
 ### 5️⃣ Vibe Coder の起動
 
@@ -118,334 +96,273 @@ SIGNALING_SERVER_URL=https://signal.vibe-coder.space
 ./scripts/vibe-coder start
 ```
 
-**これだけで完了！** 🎉
-- 開発用のDockerコンテナが起動します。
-- ホストサーバーが http://localhost:8080 で利用可能になります。
-- PWAは https://vibe-coder.space でアクセスできます。
+**起動確認**:
+- ホストサーバーが http://localhost:8080 で利用可能
+- 8桁のHost IDがターミナルに表示される（例：`53815375`）
 
-### 6️⃣ アクセス
+### 6️⃣ サーバー状態確認
 
-- **PWA**: https://vibe-coder.space （推奨）
-- **ホストサーバー (開発環境)**: http://localhost:8080
-- **APIドキュメント**: http://localhost:8080/api-docs
-- **ヘルスチェック**: http://localhost:8080/health
+```bash
+# サーバー情報確認
+curl http://localhost:8080/
 
-## 📱 使い方
+# ヘルスチェック
+curl http://localhost:8080/api/health
 
-### 🔌 接続方法
-
-1. **開発環境を起動**:
-   ```bash
-   npm run start
-   ```
-2. **PWAを開く**: スマートフォンでPWAにアクセス
-3. **サーバーIDを入力**: ターミナルに表示される8桁のサーバーIDを入力
-4. **接続**: WebRTC P2P接続が自動で確立
-
-(以降の使い方は変更なし)
-
-### 🎤 音声コマンド
-
-マイクボタンをタップして自然言語で指示：
-
-```
-「認証機能を追加して」
-「バグを修正して」  
-「テストを実行して」
-「デプロイの準備をして」
+# サービス状態確認
+./scripts/vibe-coder status
 ```
 
-### ⚡ クイックコマンド
+## 📡 API使用方法
 
-よく使うコマンドをワンタップで実行：
+### 🔑 認証フロー
 
-| アイコン | 機能 | コマンド例 |
-|---------|------|----------|
-| 🔐 | ログイン機能 | `claude-code add authentication` |
-| 🐛 | バグ修正 | `claude-code fix the bug` |
-| 🧪 | テスト実行 | `npm test` |
-| 🚀 | デプロイ | `npm run deploy` |
-| 📦 | ビルド | `npm run build` |
-
-### 🎵 プレイリスト管理
-
-#### プレイリストの作成
-
+#### 1. セッション作成
+```bash
+curl -X POST http://localhost:8080/api/auth/sessions
+```
+**レスポンス:**
 ```json
 {
-  "schema": "vibe-coder-playlist-v1",
-  "metadata": {
-    "name": "Frontend Development",
-    "description": "フロントエンド開発用コマンド集",
-    "author": "your-name",
-    "version": "1.0.0",
-    "tags": ["frontend", "react", "typescript"]
-  },
-  "commands": [
-    {
-      "icon": "🎨",
-      "label": "UI Polish",
-      "command": "claude-code improve the UI design",
-      "description": "UIデザインの改善"
-    },
-    {
-      "icon": "🔍",
-      "label": "Code Review", 
-      "command": "claude-code review this code",
-      "description": "コードレビューの実行"
-    }
-  ]
+  "sessionId": "SPW49IEP",
+  "hostId": "53815375",
+  "totpSecret": "OJSGYVRSONID65SIMZ6VMVBPHQ2TUVB7OIWDYLDIGYWECYSALZDQ",
+  "message": "Enter the TOTP secret in your authenticator app, then provide TOTP code"
 }
 ```
 
-#### 共有方法
-
-1. GitHub Gist に `vibe-coder-playlist.json` として保存
-2. 自動的にプレイリスト発見システムで収集
-3. 他のユーザーがインポート可能
-
-## 🧪 テスト
-
-### テストの実行
+#### 2. TOTP認証
+1. Google AuthenticatorなどでTOTP秘密鍵を登録
+2. 6桁コードを取得
+3. 認証APIで確認：
 
 ```bash
-# 全テスト実行
-npm test
-
-# UXテストスイート
-npm run test:ux-suite
-
-# E2Eテスト
-npm run test:e2e
-
-# パフォーマンステスト
-npm run test:ux
-
-# アクセシビリティ監査
-npm run test:accessibility
+curl -X POST http://localhost:8080/api/auth/sessions/SPW49IEP/verify \
+  -H "Content-Type: application/json" \
+  -d '{"totpCode": "123456"}'
 ```
 
-### ユーザテスト
+**成功レスポンス:**
+```json
+{
+  "success": true,
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "message": "Authentication successful"
+}
+```
+
+### 🤖 Claude Code実行
 
 ```bash
-# ローカル環境でのユーザテスト（推奨）
-npm run test:local
-
-# ユーザーフィードバック収集
-npm run feedback
-
-# プレビュー環境でのユーザテスト
-npm run preview-ux
+# JWTトークンを使用してコマンド実行
+curl -X POST http://localhost:8080/api/claude/execute \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "create a hello world script in Python"}'
 ```
 
-#### 🧪 ローカルユーザーテスト手順
-
-1. **環境起動**:
-   ```bash
-   npm run test:local
-   ```
-
-2. **テスト実施**:
-   - Chrome で自動的に開く PWA または https://vibe-coder.space
-   - 表示される Server ID を PWA に入力
-   - 音声コマンドやクイックコマンドを試用
-
-3. **フィードバック収集**:
-   ```bash
-   npm run feedback
-   ```
-
-4. **テスト終了**: Ctrl+C でサービス停止
-
-## 🔧 開発
-
-### 📁 プロジェクト構成
-
-```
-vibe-coder/
-├── apps/
-│   └── web/                 # PWA (React + TypeScript)
-├── packages/
-│   ├── client/              # クライアントライブラリ
-│   ├── host/                # ホストサーバー (Node.js)
-│   ├── signaling/           # シグナリングサーバー (Vercel)
-│   └── shared/              # 共有ライブラリ
-├── scripts/                 # ビルド・デプロイスクリプト
-├── test/                    # テストファイル
-└── docker/                  # Docker設定
-```
-
-### 🛠️ 開発コマンド
+### 📊 その他のAPI
 
 ```bash
-# Vibe Coder 開発環境の操作
+# セッション状態確認
+curl http://localhost:8080/api/auth/sessions/SPW49IEP/status
+
+# セッション更新
+curl -X POST http://localhost:8080/api/auth/sessions/SPW49IEP/refresh \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# セッション削除
+curl -X DELETE http://localhost:8080/api/auth/sessions/SPW49IEP \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## 🔧 開発・管理コマンド
+
+### 基本操作
+
+```bash
+# Vibe Coder の操作
 ./scripts/vibe-coder start      # 開発環境を起動
 ./scripts/vibe-coder stop       # 開発環境を停止
 ./scripts/vibe-coder logs       # ログを確認
 ./scripts/vibe-coder status     # 状態を確認
 ./scripts/vibe-coder clean      # 環境をクリーンアップ
-
-# コード品質とテスト (pnpmを使用)
-pnpm lint                     # ESLint
-pnpm format                   # Prettier
-pnpm typecheck                # TypeScript
-pnpm test                     # Unit tests
-pnpm test:e2e                 # E2E tests
+./scripts/vibe-coder setup      # 環境設定確認
 ```
 
-### 🔍 デバッグ
+### コード品質とテスト
+
+```bash
+# テスト実行
+pnpm test                     # ユニットテスト
+pnpm test:coverage            # カバレッジ付きテスト
+pnpm test:e2e                 # E2Eテスト
+
+# コード品質チェック
+pnpm lint                     # ESLint
+pnpm format                   # Prettier
+pnpm typecheck                # TypeScript型チェック
+```
+
+### デバッグ
 
 ```bash
 # デバッグログの有効化
 export DEBUG=vibe-coder:*
-npm run vibe-coder restart
+./scripts/vibe-coder restart
 
-# サービス状態確認
-npm run vibe-coder status
-
-# ログ確認
-npm run vibe-coder logs
+# コンテナログ確認
+docker logs vibe-coder-host
 
 # API確認
-curl http://localhost:8080/health
-curl http://localhost:8080/api/connection/status
+curl http://localhost:8080/api/health
 ```
 
-## 🐳 デプロイ
+## 🐳 プロダクション デプロイ
 
-### 📦 本番デプロイ
+### Docker Composeを使用
 
-**ユーザーが構築する必要があるのはホストサーバーのみです。**
-
-#### 🖥️ ホストサーバー（必須）
 ```bash
-# 公式Dockerイメージで起動（推奨）
+# プロダクション設定で起動
+docker-compose -f docker-compose.prod.yml up -d
+
+# または統合コマンドで起動
+./scripts/vibe-coder start
+```
+
+### 手動Docker実行
+
+```bash
 docker run -d \
   --name vibe-coder-host \
   -p 8080:8080 \
-  -e CLAUDE_API_KEY=your-key \
-  -v $(pwd)/workspace:/app/workspace \
+  -e SESSION_SECRET=your-secret-key \
+  -e HOST_UID=$(id -u) \
+  -e HOST_GID=$(id -g) \
+  -v ~/.claude:/app/.claude:ro \
   --restart unless-stopped \
   jl1nie/vibe-coder:latest
-
-# または統合コマンドで起動
-npm run vibe-coder
 ```
 
-#### 📱 PWA（オプション・カスタマイズ時）
+## 📁 プロジェクト構成
+
+```
+vibe-coder/
+├── packages/
+│   ├── host/                 # ホストサーバー (Express + TypeScript)
+│   │   ├── src/
+│   │   │   ├── routes/       # API ルート
+│   │   │   ├── services/     # ビジネスロジック
+│   │   │   ├── middleware/   # 認証・エラーハンドリング
+│   │   │   └── utils/        # ユーティリティ
+│   │   └── Dockerfile        # Docker設定
+│   └── shared/               # 共有ライブラリ (型定義・ユーティリティ)
+├── scripts/                  # ビルド・デプロイスクリプト
+├── .env.example              # 環境変数テンプレート
+├── docker-compose.yml        # Docker Compose設定
+└── API.md                    # API詳細ドキュメント
+```
+
+## 🧪 テスト
+
+### 基本テスト実行
+
 ```bash
-# Vercel にPWAをデプロイ（カスタマイズする場合のみ）
-npm run deploy:pwa
+# 全テスト実行
+pnpm test
+
+# 特定パッケージのテスト
+pnpm --filter @vibe-coder/host test
+pnpm --filter @vibe-coder/shared test
+
+# E2Eテスト
+pnpm test:e2e
 ```
 
-#### 📡 シグナリングサーバー（不要）
-**一般ユーザーは公式サーバー（`https://signal.vibe-coder.space`）を利用するため、独自構築は不要です。**
-
-エンタープライズで独自構築が必要な場合のみ：
-```bash
-# カスタムシグナリングサーバーのデプロイ
-cd packages/signaling
-npm run deploy
-```
-
-### 🔐 CI/CDシークレット（メンテナー用）
-
-GitHub Actionsで自動デプロイを行うには、以下のシークレットが必要：
+### APIテスト例
 
 ```bash
-# Docker Hub
-DOCKER_USERNAME=jl1nie
-DOCKER_PASSWORD=your-docker-token
+# 完全な認証フローテスト
+scripts/test-api.sh
 
-# Vercel
-VERCEL_TOKEN=your-vercel-token
-VERCEL_ORG_ID=your-org-id
-VERCEL_PWA_PROJECT_ID=pwa-project-id
-VERCEL_SIGNALING_PROJECT_ID=signaling-project-id
+# 個別APIテスト
+curl -s http://localhost:8080/api/health | jq .
 ```
-
-詳細は [DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) を参照
-
-### 🔧 設定
-
-詳細は [CONFIG_DOCUMENTATION.md](./CONFIG_DOCUMENTATION.md) を参照
 
 ## 📊 パフォーマンス
 
-### ベンチマーク結果
+### 実測値
 
-| 指標 | 目標値 | 実測値 |
-|------|--------|--------|
-| **First Contentful Paint** | < 1.5s | 1.2s |
-| **Largest Contentful Paint** | < 2.5s | 2.1s |
-| **Cumulative Layout Shift** | < 0.1 | 0.05 |
-| **Time to Interactive** | < 3s | 2.8s |
-| **PWA Score** | > 90 | 95 |
+| 指標 | 値 |
+|------|-----|
+| **メモリ使用量** | ~12-15MB (アイドル時) |
+| **CPU使用率** | < 1% (アイドル時) |
+| **起動時間** | < 5秒 |
+| **レスポンス時間** | < 10ms (API) |
 
-### リソース使用量
+### 監視
 
-- **メモリ使用量**: ~150MB (ホストサーバー)
-- **CPU使用率**: < 5% (アイドル時)
-- **ネットワーク**: P2P接続で最小限
+```bash
+# リソース使用量確認
+docker stats vibe-coder-host
+
+# ヘルスチェック
+curl http://localhost:8080/api/health
+```
 
 ## 🔒 セキュリティ
 
-セキュリティについては [SECURITY.md](./SECURITY.md) を参照
+### 実装済みセキュリティ機能
 
-### 主要なセキュリティ機能
+- **多層認証**: 8桁キー + TOTP 2FA
+- **JWT認証**: セッション管理とトークンベース認証
+- **セキュリティヘッダー**: Helmet.js による XSS/CSRF 対策
+- **入力検証**: Zod による厳密な型チェック
+- **コンテナ分離**: Dockerによる環境分離
+- **最小権限**: 非rootユーザーでの実行
 
-- **プロンプトインジェクション防止**: 危険なパターンの検出・ブロック
-- **ファイルアクセス制御**: パス検証とサンドボックス実行
-- **WebRTC P2P**: エンドツーエンド暗号化
-- **レート制限**: API abuse防止
-- **セキュリティヘッダー**: XSS, CSRF対策
+### セキュリティ設定
+
+```bash
+# 本番環境では必ずセキュリティを有効化
+ENABLE_SECURITY=true
+
+# 強力なセッション秘密鍵を使用
+SESSION_SECRET=$(openssl rand -hex 32)
+```
 
 ## 🤝 コントリビューション
 
 ### 貢献方法
 
-1. **Fork** このリポジトリ
-2. **Feature Branch** を作成: `git checkout -b feature/amazing-feature`
-3. **Commit** 変更: `git commit -m 'Add amazing feature'`
-4. **Push** ブランチ: `git push origin feature/amazing-feature`
-5. **Pull Request** を作成
+1. Fork このリポジトリ
+2. Feature Branch を作成: `git checkout -b feature/amazing-feature`
+3. 変更をコミット: `git commit -m 'Add amazing feature'`
+4. Push: `git push origin feature/amazing-feature`
+5. Pull Request を作成
 
 ### 開発ガイドライン
 
-- **コミットメッセージ**: [Conventional Commits](https://www.conventionalcommits.org/) 形式
-- **コードスタイル**: ESLint + Prettier設定に従う
-- **テスト**: 新機能には必ずテストを追加
-- **文書**: 変更時は関連文書も更新
-
-### Issue報告
-
-バグレポートや機能要求は [GitHub Issues](https://github.com/your-username/vibe-coder/issues) で受け付けています。
+- コミットメッセージ: [Conventional Commits](https://www.conventionalcommits.org/) 形式
+- コードスタイル: ESLint + Prettier設定に従う
+- テスト: 新機能には必ずテストを追加
+- 文書: 変更時は関連文書も更新
 
 ## 📚 関連文書
 
-### ユーザー向け
-- **[🚀 クイックスタート](#-クイックスタート)** - すぐに始める方法
-- **[📱 使い方](#-使い方)** - 基本的な操作方法
-- **[🎵 プレイリスト管理](#-プレイリスト管理)** - カスタムコマンドの作成
-
 ### 開発者向け
-- **[💻 DEVELOPMENT.md](./DEVELOPMENT.md)** - 開発環境構築・ビルド・テスト実行の詳細手順
-- **[📋 CONFIG_DOCUMENTATION.md](./CONFIG_DOCUMENTATION.md)** - 設定ファイルの詳細
-- **[🚀 DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md)** - デプロイメント手順
-- **[🔒 SECURITY.md](./SECURITY.md)** - セキュリティガイド
-- **[🧪 UX_TEST_SUMMARY.md](./UX_TEST_SUMMARY.md)** - UXテスト結果
+- **[💻 DEVELOPMENT.md](./DEVELOPMENT.md)** - 開発環境構築・API仕様・テスト実行の詳細
+- **[📋 CLAUDE.md](./CLAUDE.md)** - プロジェクト仕様とチェックポイント
+- **[🔧 API.md](./API.md)** - API エンドポイント詳細ドキュメント
+
+### 運用者向け
+- **[🚀 Docker Hub](https://hub.docker.com/r/jl1nie/vibe-coder)** - 公式Dockerイメージ
+- **[📊 ヘルスチェック](http://localhost:8080/api/health)** - サービス状態監視
 
 ## 📄 ライセンス
 
 このプロジェクトは Apache 2.0 ライセンスの下で公開されています。詳細は [LICENSE](./LICENSE) を参照してください。
 
-## 🙏 謝辞
-
-- **Anthropic**: Claude API の提供
-- **React**: モダンなUI開発フレームワーク
-- **WebRTC**: P2P通信技術
-- **Vercel**: エッジコンピューティングプラットフォーム
-
 ---
 
-**Vibe Coder で、どこでも直感的な開発体験を。** 🚀✨
+**Vibe Coder - セキュアで効率的なリモート開発環境** 🚀✨

@@ -4,9 +4,13 @@ FROM node:20-alpine AS builder
 # Add security and process management packages
 RUN apk add --no-cache dumb-init su-exec
 
-# Create a non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Environment variables for dynamic UID/GID
+ARG HOST_UID=1001
+ARG HOST_GID=1001
+
+# Create a non-root user with dynamic UID/GID
+RUN addgroup -g ${HOST_GID} -S nodejs && \
+    adduser -S nodejs -u ${HOST_UID} -G nodejs
 
 WORKDIR /app
 
@@ -41,6 +45,10 @@ USER nodejs
 # Production stage
 FROM node:20-alpine AS production
 
+# Environment variables for dynamic UID/GID (production)
+ARG HOST_UID=1001
+ARG HOST_GID=1001
+
 WORKDIR /app
 
 # Install pnpm, Claude Code and required packages
@@ -54,25 +62,25 @@ RUN apk add --no-cache \
     curl \
     && rm -rf /var/cache/apk/*
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Create non-root user with dynamic UID/GID
+RUN addgroup -g ${HOST_GID} -S nodejs && \
+    adduser -S nodejs -u ${HOST_UID} -G nodejs
 
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/host/package.json ./packages/host/
 
 # Install all dependencies (production only)
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Copy built application
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/host/dist ./packages/host/dist
 
-# Create claude config directory
-RUN mkdir -p /app/.claude && \
-    chown -R nodejs:nodejs /app/.claude
+# Create directories and set permissions
+RUN mkdir -p /app/.claude /app/logs && \
+    chown -R nodejs:nodejs /app/.claude /app/logs
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -89,9 +97,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Switch to non-root user
 USER nodejs
 
-# Set working directory to host package
-WORKDIR /app/packages/host
+# Set working directory to root for dependencies
+WORKDIR /app
 
 # Start the application
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/index.js"]
+CMD ["node", "packages/host/dist/host/src/index.js"]

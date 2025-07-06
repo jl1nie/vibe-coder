@@ -497,39 +497,196 @@ vercel dev --listen 3001
 
 ### API エンドポイント
 
-#### セッション管理
-```typescript
-// POST /api/sessions
-{
-  "hostId": "12345678",
-  "capabilities": ["claude-code", "voice", "file-upload"]
-}
+## 📡 実際のAPI仕様とテスト方法
 
-// Response
+### 基本情報確認
+
+#### ルート情報取得
+```bash
+GET http://localhost:8080/
+```
+**レスポンス例:**
+```json
 {
-  "sessionId": "ABCD1234",
-  "expiresAt": "2024-01-01T12:00:00Z"
+  "name": "Vibe Coder Host",
+  "version": "0.1.0",
+  "hostId": "53815375",
+  "status": "running", 
+  "timestamp": "2025-07-06T15:20:02.062Z"
 }
 ```
 
-#### WebRTC シグナリング
-```typescript
-// POST /api/signal
+#### ヘルスチェック
+```bash
+GET http://localhost:8080/api/health
+```
+**レスポンス例:**
+```json
 {
-  "type": "offer",
-  "sessionId": "ABCD1234", 
-  "hostId": "12345678",
-  "offer": {
-    "type": "offer",
-    "sdp": "v=0\r\no=..."
-  }
+  "status": "degraded",
+  "timestamp": "2025-07-06T15:20:07.939Z",
+  "uptime": 1434.040062984,
+  "sessions": {
+    "active": 0,
+    "total": 1
+  },
+  "memory": {
+    "used": 12845280,
+    "total": 14680064,
+    "percentage": 88
+  },
+  "claude": {
+    "available": false,
+    "lastCheck": "2025-07-06T15:20:07.939Z"
+  },
+  "responseTime": 1
 }
+```
 
-// Response
+### 認証フロー（8桁キー + TOTP 2FA）
+
+#### 1. セッション作成とTOTP秘密鍵取得
+```bash
+POST http://localhost:8080/api/auth/sessions
+Content-Type: application/json
+```
+**レスポンス例:**
+```json
+{
+  "sessionId": "SPW49IEP",
+  "hostId": "53815375",
+  "totpSecret": "OJSGYVRSONID65SIMZ6VMVBPHQ2TUVB7OIWDYLDIGYWECYSALZDQ",
+  "message": "Enter the TOTP secret in your authenticator app, then provide TOTP code"
+}
+```
+
+#### 2. TOTP認証とJWTトークン取得
+```bash
+POST http://localhost:8080/api/auth/sessions/SPW49IEP/verify
+Content-Type: application/json
+
+{
+  "totpCode": "123456"
+}
+```
+**成功レスポンス:**
+```json
 {
   "success": true,
-  "message": "Offer stored successfully"
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "message": "Authentication successful"
 }
+```
+
+#### 3. セッション状態確認
+```bash
+GET http://localhost:8080/api/auth/sessions/SPW49IEP/status
+```
+
+#### 4. セッション更新
+```bash
+POST http://localhost:8080/api/auth/sessions/SPW49IEP/refresh
+Authorization: Bearer {jwt_token}
+```
+
+#### 5. セッション削除（ログアウト）
+```bash
+DELETE http://localhost:8080/api/auth/sessions/SPW49IEP
+Authorization: Bearer {jwt_token}
+```
+
+### Claude Code実行
+
+#### コマンド実行
+```bash
+POST http://localhost:8080/api/claude/execute
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "command": "create a hello world script in Python"
+}
+```
+
+#### 実行中コマンドの中止
+```bash
+POST http://localhost:8080/api/claude/cancel
+Authorization: Bearer {jwt_token}
+```
+
+### WebRTC P2P通信
+
+#### シグナリング（Offer/Answer交換）
+```bash
+POST http://localhost:8080/api/webrtc/signal
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "type": "offer",
+  "sessionId": "SPW49IEP",
+  "sdp": "v=0...",
+  "timestamp": 1672531200000
+}
+```
+
+### 完全なテストシナリオ例
+
+```bash
+# 1. サーバー状態確認
+curl -s http://localhost:8080/ | jq .
+
+# 2. セッション作成
+RESPONSE=$(curl -s -X POST http://localhost:8080/api/auth/sessions)
+SESSION_ID=$(echo $RESPONSE | jq -r '.sessionId')
+TOTP_SECRET=$(echo $RESPONSE | jq -r '.totpSecret')
+HOST_ID=$(echo $RESPONSE | jq -r '.hostId')
+
+echo "Session ID: $SESSION_ID"
+echo "TOTP Secret: $TOTP_SECRET"
+echo "Host ID: $HOST_ID"
+
+# 3. Authenticatorアプリで TOTP_SECRET を設定し、6桁コードを取得
+
+# 4. TOTP認証（実際のコードに置き換える）
+TOTP_CODE="123456"
+AUTH_RESPONSE=$(curl -s -X POST http://localhost:8080/api/auth/sessions/$SESSION_ID/verify \
+  -H "Content-Type: application/json" \
+  -d "{\"totpCode\": \"$TOTP_CODE\"}")
+
+JWT_TOKEN=$(echo $AUTH_RESPONSE | jq -r '.token')
+echo "JWT Token: $JWT_TOKEN"
+
+# 5. Claude Codeコマンド実行テスト
+curl -X POST http://localhost:8080/api/claude/execute \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "echo hello world"}' | jq .
+```
+
+### WebSocket接続テスト
+
+```javascript
+// ブラウザまたはNode.jsでのWebSocket接続
+const ws = new WebSocket('ws://localhost:8080');
+
+ws.onopen = function() {
+  console.log('WebSocket connected');
+  
+  // Ping送信
+  ws.send(JSON.stringify({type: 'ping'}));
+  
+  // ハートビート送信
+  ws.send(JSON.stringify({
+    type: 'heartbeat',
+    sessionId: 'SPW49IEP'
+  }));
+};
+
+ws.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  console.log('Received:', data);
+};
 ```
 
 ### 環境変数
