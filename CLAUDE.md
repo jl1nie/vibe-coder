@@ -920,8 +920,8 @@ export default FinalVibeCoder;
 **動作確認済み:**
 ```bash
 # 設定ファイル不要で即座に動作
-docker compose up -d  # ✅ 動作確認済み
-pnpm start           # ✅ 動作確認済み
+./scripts/vibe-coder start  # ✅ 推奨起動方法
+pnpm install && pnpm start  # ✅ 手動起動方法
 ```
 
 **ユーザビリティ向上:**

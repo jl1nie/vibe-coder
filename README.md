@@ -44,12 +44,11 @@ claude auth login
 git clone https://github.com/your-username/vibe-coder.git
 cd vibe-coder
 
-# ワンコマンドで起動
-docker compose up -d
-
-# または手動で起動
+# 依存関係をインストール
 pnpm install
-pnpm start
+
+# ワンコマンドで起動
+./scripts/vibe-coder start
 ```
 
 ### ステップ3: スマホから接続
@@ -128,6 +127,19 @@ pnpm start
 - プレゼン後すぐにフィードバック反映
 - 移動中に次のタスクを準備
 
+## ⚙️ 管理コマンド
+
+すべての操作は専用スクリプトで簡単に実行できます：
+
+```bash
+./scripts/vibe-coder start      # サーバー起動
+./scripts/vibe-coder stop       # サーバー停止
+./scripts/vibe-coder restart    # サーバー再起動
+./scripts/vibe-coder status     # 状態確認
+./scripts/vibe-coder logs       # ログ確認
+./scripts/vibe-coder clean      # 環境クリーンアップ
+```
+
 ## ⚙️ 設定
 
 基本的に設定は不要です。すべて自動で最適な設定が適用されます：
@@ -140,15 +152,15 @@ pnpm start
 ## 🐳 Docker での実行
 
 ```bash
-# 単発実行
+# 推奨: スクリプト経由で起動（最も簡単）
+./scripts/vibe-coder start
+
+# 手動Docker実行
 docker run -d \
   -p 8080:8080 \
   -v ~/.claude:/app/.claude \
   -v $(pwd):/workspace \
   jl1nie/vibe-coder:latest
-
-# docker-compose での実行
-docker compose up -d
 ```
 
 ## 🔧 トラブルシューティング
@@ -157,8 +169,11 @@ docker compose up -d
 
 **❓ 8桁キーが表示されない**
 ```bash
+# ステータス確認
+./scripts/vibe-coder status
+
 # ログを確認
-docker logs vibe-coder-host
+./scripts/vibe-coder logs
 ```
 
 **❓ 2FA認証が通らない**
@@ -172,8 +187,14 @@ claude auth status
 ```
 
 **❓ 接続できない**
+```bash
+# サービス状態確認
+./scripts/vibe-coder status
+
+# 再起動
+./scripts/vibe-coder restart
+```
 - ファイアウォール設定確認（ポート8080）
-- Docker コンテナの起動状態確認
 
 ## 📞 サポート
 
