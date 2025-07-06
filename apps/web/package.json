@@ -2,6 +2,7 @@
   "name": "@vibe-coder/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Vibe Coder PWA - Mobile-first Claude Code interface",
   "scripts": {
     "dev": "vite",

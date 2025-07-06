@@ -75,6 +75,7 @@ export class WebRTCService {
           sessionId,
           hostId: this.sessionManager.getHostId(),
           offer: {
+            type: 'offer',
             sessionId,
             sdp: JSON.stringify(data),
             timestamp: Date.now()

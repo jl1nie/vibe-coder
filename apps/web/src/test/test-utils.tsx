@@ -2,6 +2,9 @@ import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { vi } from 'vitest';
 
+// Import act from react instead of react-dom/test-utils
+export { act } from 'react';
+
 // Custom render function with providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;

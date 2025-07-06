@@ -92,4 +92,4 @@ WORKDIR /app/packages/host
 
 # Start the application
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/host/src/index.js"]
+CMD ["node", "dist/index.js"]

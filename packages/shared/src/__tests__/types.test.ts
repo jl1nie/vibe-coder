@@ -164,6 +164,7 @@ describe('Schema Validation', () => {
       const offer = {
         type: 'offer' as const,
         sdp: 'sdp-offer-data',
+        timestamp: Date.now(),
       };
 
       const result = WebRTCOfferSchema.safeParse(offer);
@@ -174,6 +175,7 @@ describe('Schema Validation', () => {
       const answer = {
         type: 'answer' as const,
         sdp: 'sdp-answer-data',
+        timestamp: Date.now(),
       };
 
       const result = WebRTCAnswerSchema.safeParse(answer);

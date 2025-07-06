@@ -70,14 +70,14 @@ cd vibe-coder
 ### 2️⃣ 依存関係のインストール
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 3️⃣ Claude Code のセットアップ
 
 ```bash
 # Claude Code CLIをインストール
-npm install -g @anthropic/claude-code
+pnpm install -g @anthropic-ai/claude-code
 
 # Claude Codeにログイン（APIキーを設定）
 claude-code auth login
@@ -115,7 +115,7 @@ SIGNALING_SERVER_URL=https://signal.vibe-coder.space
 
 ```bash
 # Vibe Coder を起動
-npm run start
+./scripts/vibe-coder start
 ```
 
 **これだけで完了！** 🎉
@@ -279,18 +279,18 @@ vibe-coder/
 
 ```bash
 # Vibe Coder 開発環境の操作
-npm start                   # 開発環境を起動
-npm stop                    # 開発環境を停止
-npm run logs                # ログを確認
-npm run status              # 状態を確認
-npm run clean:env           # 環境をクリーンアップ（コンテナとイメージを削除）
+./scripts/vibe-coder start      # 開発環境を起動
+./scripts/vibe-coder stop       # 開発環境を停止
+./scripts/vibe-coder logs       # ログを確認
+./scripts/vibe-coder status     # 状態を確認
+./scripts/vibe-coder clean      # 環境をクリーンアップ
 
-# コード品質とテスト
-npm run lint                # ESLint
-npm run format              # Prettier
-npm run typecheck           # TypeScript
-npm test                    # Unit tests
-npm run test:e2e            # E2E tests
+# コード品質とテスト (pnpmを使用)
+pnpm lint                     # ESLint
+pnpm format                   # Prettier
+pnpm typecheck                # TypeScript
+pnpm test                     # Unit tests
+pnpm test:e2e                 # E2E tests
 ```
 
 ### 🔍 デバッグ

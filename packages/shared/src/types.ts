@@ -32,15 +32,17 @@ export const SessionSchema = z.object({
 });
 
 export const WebRTCOfferSchema = z.object({
+  type: z.literal('offer'),
   sessionId: z.string().optional(),
   sdp: z.string(),
-  timestamp: z.number(),
+  timestamp: z.number().optional(),
 });
 
 export const WebRTCAnswerSchema = z.object({
+  type: z.literal('answer'),
   sessionId: z.string().optional(),
   sdp: z.string(),
-  timestamp: z.number(),
+  timestamp: z.number().optional(),
 });
 
 export const WebRTCIceCandidateSchema = z.object({

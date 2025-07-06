@@ -89,9 +89,9 @@ Vibe Coderはモノレポ構成であり、各サービスを個別に、また�
 
 ```bash
 # ホストサーバーをDockerで起動
-npm run start
+pnpm start
 ```
-コンテナを停止するには `npm run stop` を使用します。
+コンテナを停止するには `pnpm stop` を使用します。
 
 #### PWA (フロントエンド)
 
