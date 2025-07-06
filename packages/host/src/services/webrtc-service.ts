@@ -1,7 +1,5 @@
 import SimplePeer from 'simple-peer';
-import { SignalMessage, SignalResponse } from '@vibe-coder/shared';
 import logger from '../utils/logger';
-import { hostConfig } from '../utils/config';
 import { SessionManager } from './session-manager';
 import { ClaudeService } from './claude-service';
 
@@ -16,13 +14,9 @@ export interface WebRTCConnection {
 
 export class WebRTCService {
   private connections = new Map<string, WebRTCConnection>();
-  private signalingUrl: string;
-  private sessionManager: SessionManager;
   private claudeService: ClaudeService;
 
-  constructor(sessionManager: SessionManager, claudeService: ClaudeService) {
-    this.signalingUrl = hostConfig.signalingUrl;
-    this.sessionManager = sessionManager;
+  constructor(_sessionManager: SessionManager, claudeService: ClaudeService) {
     this.claudeService = claudeService;
   }
 
@@ -136,7 +130,7 @@ export class WebRTCService {
         
         try {
           // Claude Codeコマンドを実行
-          const result = await this.claudeService.executeCommand(message.command);
+          const result = await this.claudeService.executeCommand(message.command, sessionId);
           
           // 結果をリアルタイムでストリーミング
           if (result.output) {

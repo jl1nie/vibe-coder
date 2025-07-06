@@ -1,69 +1,65 @@
-import { config } from 'dotenv';
-import { z } from 'zod';
 import { HostConfig } from '../types';
+import { generateSessionSecret } from './security';
 import path from 'path';
+import fs from 'fs';
 
-// Load environment variables from project root  
-// Try multiple possible .env locations
-const possibleEnvPaths = [
-  path.resolve(process.cwd(), '../../.env'), // from host package
-  path.resolve(__dirname, '../../../../.env'), // from compiled dist
-  path.resolve(process.cwd(), '.env'), // from current directory
-];
+// Simplified configuration - no environment variables needed
+// Everything uses sensible defaults
 
-for (const envPath of possibleEnvPaths) {
-  try {
-    require('fs').accessSync(envPath);
-    config({ path: envPath });
-    console.log(`Using .env file: ${envPath}`);
-    break;
-  } catch (e) {
-    // Continue to next path
+function getOrCreateSessionSecret(): string {
+  // Look for saved session secret in project root
+  const projectRoot = path.resolve(__dirname, '../../../../..');
+  const secretPath = path.resolve(projectRoot, '.session-secret');
+  const fallbackSecretPath = path.resolve(process.cwd(), '.session-secret');
+  
+  for (const secretFile of [secretPath, fallbackSecretPath]) {
+    try {
+      if (fs.existsSync(secretFile)) {
+        const savedSecret = fs.readFileSync(secretFile, 'utf8').trim();
+        if (savedSecret.length >= 32) {
+          console.log(`Using saved session secret`);
+          return savedSecret;
+        }
+      }
+    } catch (error) {
+      // Continue to next path or generate new secret
+    }
   }
-}
 
-const ConfigSchema = z.object({
-  PORT: z.string().default('8080'),
-  SIGNALING_SERVER_URL: z.string().url().default('https://vibe-coder.space/api/signal'),
-  SESSION_SECRET: z.string().min(32, 'Session secret must be at least 32 characters'),
-  MAX_CONCURRENT_SESSIONS: z.string().default('10'),
-  COMMAND_TIMEOUT: z.string().default('30000'),
-  ENABLE_SECURITY: z.string().default('true'),
-  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
-  CLAUDE_CONFIG_PATH: z.string().default('/app/.claude'),
-});
-
-function validateConfig(): HostConfig {
-  try {
-    const env = ConfigSchema.parse(process.env);
-    
-    return {
-      port: parseInt(env.PORT, 10),
-      claudeConfigPath: env.CLAUDE_CONFIG_PATH,
-      signalingUrl: env.SIGNALING_SERVER_URL,
-      sessionSecret: env.SESSION_SECRET,
-      maxConcurrentSessions: parseInt(env.MAX_CONCURRENT_SESSIONS, 10),
-      commandTimeout: parseInt(env.COMMAND_TIMEOUT, 10),
-      enableSecurity: env.ENABLE_SECURITY === 'true',
-      logLevel: env.LOG_LEVEL,
-      hostId: '', // SessionManager で生成される
-    };
-  } catch (error) {
-    console.error('Configuration validation failed:', error);
-    process.exit(1);
+  // Generate new session secret
+  const newSecret = generateSessionSecret();
+  
+  // Try to save to project root first, fallback to current directory
+  for (const secretFile of [secretPath, fallbackSecretPath]) {
+    try {
+      fs.writeFileSync(secretFile, newSecret, { mode: 0o600 }); // Secure file permissions
+      console.log(`Generated and saved new session secret`);
+      return newSecret;
+    } catch (error) {
+      console.warn(`Failed to save session secret:`, (error as Error).message);
+      continue;
+    }
   }
+
+  // If we can't save to file, use in-memory (warn user)
+  console.warn('Warning: Could not save session secret to file. Using in-memory secret (sessions will not persist across restarts)');
+  return newSecret;
 }
 
-export const hostConfig = validateConfig();
-
-export function getRequiredEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Required environment variable ${name} is not set`);
-  }
-  return value;
+function createDefaultConfig(): HostConfig {
+  return {
+    port: 8080,
+    claudeConfigPath: '/app/.claude',
+    signalingUrl: 'https://vibe-coder.space/api/signal',
+    sessionSecret: getOrCreateSessionSecret(),
+    maxConcurrentSessions: 10,
+    commandTimeout: 30000,
+    enableSecurity: true,
+    logLevel: 'info' as const,
+    hostId: '', // SessionManager で生成される
+  };
 }
 
-export function getOptionalEnvVar(name: string, defaultValue: string): string {
-  return process.env[name] || defaultValue;
-}
+export const hostConfig = createDefaultConfig();
+
+// No environment variable helpers needed anymore - everything uses defaults

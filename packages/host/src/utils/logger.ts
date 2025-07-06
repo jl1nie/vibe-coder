@@ -1,8 +1,7 @@
 import winston from 'winston';
-import { hostConfig } from './config';
 
 const logger = winston.createLogger({
-  level: hostConfig.logLevel,
+  level: 'info', // Use simple default instead of config dependency
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),

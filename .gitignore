@@ -70,6 +70,9 @@ web_modules/
 .env.*
 !.env.example
 
+# Auto-generated session secrets
+.session-secret
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
