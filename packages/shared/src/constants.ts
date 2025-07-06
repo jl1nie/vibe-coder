@@ -127,14 +127,15 @@ export const TERMINAL_CONFIG = {
 
 export const SECURITY_CONFIG = {
   allowedCommands: [
+    'claude',
     'claude-code',
+    'echo', // for testing
     'npm',
     'yarn',
     'pnpm',
     'git',
     'ls',
     'cat',
-    'echo',
     'pwd',
     'cd',
   ],

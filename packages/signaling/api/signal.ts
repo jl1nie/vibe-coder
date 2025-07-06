@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  SignalMessageSchema, 
   SignalResponse, 
   WebRTCOffer, 
-  WebRTCAnswer 
+  WebRTCAnswer,
+  WebRTCIceCandidate,
+  SignalMessage
 } from '@vibe-coder/shared';
 
-// Edge Functions には永続化機能がないため、メモリ内でのみ一時的なセッション管理
-const sessions = new Map<string, {
+// 統一セッション管理 - 全WebRTC情報を一箇所で管理
+interface SessionData {
+  // セッション基本情報
   hostId: string;
-  offer?: WebRTCOffer;
-  answer?: WebRTCAnswer;
+  status: 'waiting' | 'connecting' | 'connected' | 'disconnected';
   createdAt: number;
   lastActivity: number;
-}>();
+  connectedClients: number;
+  
+  // WebRTC情報
+  offer?: WebRTCOffer;
+  answer?: WebRTCAnswer;
+  hostCandidates: WebRTCIceCandidate[]; // ホスト側のICE Candidates
+  clientCandidates: WebRTCIceCandidate[]; // クライアント側のICE Candidates
+}
+
+const sessions = new Map<string, SessionData>();
 
 // 5分後に古いセッションを削除
 const SESSION_TIMEOUT = 5 * 60 * 1000;
@@ -39,18 +49,55 @@ export default async function handler(req: NextRequest) {
     cleanupExpiredSessions();
 
     const body = await req.json();
-    const result = SignalMessageSchema.safeParse(body);
-    
-    if (!result.success) {
+    // 基本的な型チェック
+    if (!body.type || !body.sessionId || !body.hostId) {
       return NextResponse.json(
         { success: false, error: 'Invalid request format' },
         { status: 400 }
       );
     }
 
-    const { type, sessionId, hostId, offer, answer } = result.data;
+    // 許可されたtypeかチェック
+    const validTypes = ['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate'];
+    if (!validTypes.includes(body.type)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid request format' },
+        { status: 400 }
+      );
+    }
+
+    const { type, sessionId, hostId, offer, answer, candidate } = body as SignalMessage;
 
     switch (type) {
+      case 'create-session': {
+        // セッション作成
+        if (!sessionId || !hostId) {
+          return NextResponse.json(
+            { success: false, error: 'sessionId and hostId are required' },
+            { status: 400 }
+          );
+        }
+
+        const newSession: SessionData = {
+          hostId,
+          status: 'waiting',
+          createdAt: Date.now(),
+          lastActivity: Date.now(),
+          connectedClients: 0,
+          hostCandidates: [],
+          clientCandidates: []
+        };
+
+        sessions.set(sessionId, newSession);
+
+        const createResponse: SignalResponse = {
+          success: true,
+          message: 'Session created successfully'
+        };
+
+        return NextResponse.json(createResponse);
+      }
+
       case 'offer': {
         // ホストからのOfferを保存
         if (!offer) {
@@ -60,12 +107,24 @@ export default async function handler(req: NextRequest) {
           );
         }
 
-        sessions.set(sessionId, {
-          hostId,
-          offer,
-          createdAt: Date.now(),
-          lastActivity: Date.now()
-        });
+        let session = sessions.get(sessionId);
+        if (!session) {
+          // セッションが存在しない場合は新規作成
+          session = {
+            hostId,
+            status: 'waiting',
+            createdAt: Date.now(),
+            lastActivity: Date.now(),
+            connectedClients: 0,
+            hostCandidates: [],
+            clientCandidates: []
+          };
+          sessions.set(sessionId, session);
+        }
+
+        session.offer = offer;
+        session.status = 'connecting';
+        session.lastActivity = Date.now();
 
         const response: SignalResponse = {
           success: true,
@@ -93,6 +152,8 @@ export default async function handler(req: NextRequest) {
         }
 
         session.answer = answer;
+        session.status = 'connected';
+        session.connectedClients = 1;
         session.lastActivity = Date.now();
 
         const answerResponse: SignalResponse = {
@@ -101,6 +162,48 @@ export default async function handler(req: NextRequest) {
         };
 
         return NextResponse.json(answerResponse);
+      }
+
+      case 'candidate': {
+        if (!candidate) {
+          return NextResponse.json(
+            { success: false, error: 'Candidate data required' },
+            { status: 400 }
+          );
+        }
+
+        const session = sessions.get(sessionId);
+        if (!session) {
+          return NextResponse.json(
+            { success: false, error: 'Session not found' },
+            { status: 404 }
+          );
+        }
+
+        // ホストからの候補かクライアントからの候補かを判定
+        // リクエスト元のhostIdがセッションのhostIdと一致するかで判定
+        const isFromHost = hostId === session.hostId;
+        
+        const candidateData: WebRTCIceCandidate = {
+          sessionId,
+          candidate: JSON.stringify(candidate),
+          timestamp: Date.now()
+        };
+
+        if (isFromHost) {
+          session.hostCandidates.push(candidateData);
+        } else {
+          session.clientCandidates.push(candidateData);
+        }
+        
+        session.lastActivity = Date.now();
+
+        const candidateResponse: SignalResponse = {
+          success: true,
+          message: 'Candidate stored successfully'
+        };
+
+        return NextResponse.json(candidateResponse);
       }
 
       case 'get-offer': {
@@ -141,6 +244,37 @@ export default async function handler(req: NextRequest) {
         };
 
         return NextResponse.json(getAnswerResponse);
+      }
+
+      case 'get-candidate': {
+        const candidateSession = sessions.get(sessionId);
+        if (!candidateSession) {
+          return NextResponse.json(
+            { success: false, error: 'Session not found' },
+            { status: 404 }
+          );
+        }
+
+        // リクエスト元に応じて適切な候補を返す
+        const isFromHost = hostId === candidateSession.hostId;
+        let candidates: WebRTCIceCandidate[];
+        
+        if (isFromHost) {
+          // ホストからのリクエスト → クライアントの候補を返す
+          candidates = candidateSession.clientCandidates.splice(0);
+        } else {
+          // クライアントからのリクエスト → ホストの候補を返す
+          candidates = candidateSession.hostCandidates.splice(0);
+        }
+
+        candidateSession.lastActivity = Date.now();
+
+        const getCandidateResponse: SignalResponse = {
+          success: true,
+          candidates: candidates
+        };
+
+        return NextResponse.json(getCandidateResponse);
       }
 
       default:

@@ -1,11 +1,11 @@
 import { vi } from 'vitest';
 
 // Mock environment variables for testing
-process.env.CLAUDE_API_KEY = 'test-api-key';
 process.env.SESSION_SECRET = 'test-session-secret-with-sufficient-length-for-security';
 process.env.PORT = '8080';
 process.env.LOG_LEVEL = 'error';
 process.env.NODE_ENV = 'test';
+process.env.CLAUDE_CONFIG_PATH = '/tmp/test-claude-config';
 
 // Mock child_process
 vi.mock('child_process', () => ({

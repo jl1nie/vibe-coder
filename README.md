@@ -73,35 +73,45 @@ cd vibe-coder
 npm install
 ```
 
-### 3️⃣ 環境変数の設定
+### 3️⃣ Claude Code のセットアップ
 
 ```bash
-cp .env.example .env.local
+# Claude Code CLIをインストール
+npm install -g @anthropic/claude-code
+
+# Claude Codeにログイン（APIキーを設定）
+claude-code auth login
+
+# 設定を確認
+ls -la ~/.claude/
 ```
 
-`.env.local` を編集して必要な値を設定：
+### 4️⃣ 環境変数の設定
 
 ```bash
-# === Claude API設定 ===
-CLAUDE_API_KEY=sk-ant-xxxxx  # Anthropic APIキー
+cp .env.example .env
+```
 
-# === GitHub統合設定 ===
-GITHUB_TOKEN=ghp_xxxxx       # GitHub Personal Access Token
+`.env` を編集して必要な値を設定：
+
+```bash
+# === セッション暗号化設定（必須） ===
+# 32文字以上のランダム文字列を生成
+SESSION_SECRET=$(openssl rand -hex 32)
 
 # === シグナリングサーバー設定 ===
 # 公式サーバーを利用（推奨・デフォルト）
 SIGNALING_SERVER_URL=https://signal.vibe-coder.space
 
-# === 開発環境設定 ===
-NODE_ENV=development
-DEBUG=vibe-coder:*
+# === オプション設定 ===
+# DEBUG=vibe-coder:*  # デバッグログ（開発時のみ）
 ```
 
 **📡 シグナリングサーバーについて**:
 - **一般ユーザー**: 公式サーバー（`https://signal.vibe-coder.space`）を利用
 - **エンタープライズ**: 必要に応じて独自サーバーを構築
 
-### 4️⃣ Vibe Coder の起動
+### 5️⃣ Vibe Coder の起動
 
 ```bash
 # Vibe Coder を起動（公式Dockerイメージを自動利用）
@@ -113,7 +123,7 @@ npm run vibe-coder
 - ホストサーバーが http://localhost:8080 で利用可能
 - PWAは https://vibe-coder.space でアクセス
 
-### 5️⃣ アクセス
+### 6️⃣ アクセス
 
 - **PWA**: https://vibe-coder.space （推奨）
 - **ホストサーバー**: http://localhost:8080

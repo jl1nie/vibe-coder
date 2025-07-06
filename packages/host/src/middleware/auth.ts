@@ -55,3 +55,7 @@ export function createSessionValidationMiddleware(sessionManager: SessionManager
     next();
   };
 }
+
+export function authenticateSession(sessionManager: SessionManager) {
+  return createAuthMiddleware(sessionManager);
+}

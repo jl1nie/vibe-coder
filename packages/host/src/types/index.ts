@@ -22,13 +22,14 @@ export interface ClaudeCodeResult {
 
 export interface HostConfig {
   port: number;
-  claudeApiKey: string;
-  signalingServerUrl: string;
+  claudeConfigPath: string;
+  signalingUrl: string;
   sessionSecret: string;
   maxConcurrentSessions: number;
   commandTimeout: number;
   enableSecurity: boolean;
   logLevel: string;
+  hostId: string;
 }
 
 export interface SessionData {

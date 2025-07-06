@@ -7,13 +7,13 @@ config();
 
 const ConfigSchema = z.object({
   PORT: z.string().default('8080'),
-  CLAUDE_API_KEY: z.string().min(1, 'Claude API key is required'),
-  SIGNALING_SERVER_URL: z.string().url().default('https://signal.vibe-coder.space'),
+  SIGNALING_SERVER_URL: z.string().url().default('https://vibe-coder.space/api/signal'),
   SESSION_SECRET: z.string().min(32, 'Session secret must be at least 32 characters'),
   MAX_CONCURRENT_SESSIONS: z.string().default('10'),
   COMMAND_TIMEOUT: z.string().default('30000'),
   ENABLE_SECURITY: z.string().default('true'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  CLAUDE_CONFIG_PATH: z.string().default('/app/.claude'),
 });
 
 function validateConfig(): HostConfig {
@@ -22,13 +22,14 @@ function validateConfig(): HostConfig {
     
     return {
       port: parseInt(env.PORT, 10),
-      claudeApiKey: env.CLAUDE_API_KEY,
-      signalingServerUrl: env.SIGNALING_SERVER_URL,
+      claudeConfigPath: env.CLAUDE_CONFIG_PATH,
+      signalingUrl: env.SIGNALING_SERVER_URL,
       sessionSecret: env.SESSION_SECRET,
       maxConcurrentSessions: parseInt(env.MAX_CONCURRENT_SESSIONS, 10),
       commandTimeout: parseInt(env.COMMAND_TIMEOUT, 10),
       enableSecurity: env.ENABLE_SECURITY === 'true',
       logLevel: env.LOG_LEVEL,
+      hostId: '', // SessionManager で生成される
     };
   } catch (error) {
     console.error('Configuration validation failed:', error);

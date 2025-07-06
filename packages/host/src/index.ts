@@ -8,10 +8,12 @@ import { hostConfig } from './utils/config';
 import logger from './utils/logger';
 import { SessionManager } from './services/session-manager';
 import { ClaudeService } from './services/claude-service';
+import { WebRTCService } from './services/webrtc-service';
 
 import { createHealthRouter } from './routes/health';
 import { createAuthRouter } from './routes/auth';
 import { createClaudeRouter } from './routes/claude';
+import { createWebRTCRouter } from './routes/webrtc';
 
 import { errorHandler, notFoundHandler } from './middleware/error';
 
@@ -21,16 +23,19 @@ class VibeCoderHost {
   private wss!: WebSocketServer;
   private sessionManager: SessionManager;
   private claudeService: ClaudeService;
+  private webrtcService: WebRTCService;
 
   constructor() {
     this.app = express();
     this.sessionManager = new SessionManager();
     this.claudeService = new ClaudeService();
+    this.webrtcService = new WebRTCService(this.sessionManager);
     
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
     this.setupWebSocket();
+    this.setupCleanupTimer();
   }
 
   private setupMiddleware(): void {
@@ -75,6 +80,7 @@ class VibeCoderHost {
     this.app.use('/api', createHealthRouter(this.claudeService, this.sessionManager));
     this.app.use('/api/auth', createAuthRouter(this.sessionManager));
     this.app.use('/api/claude', createClaudeRouter(this.claudeService, this.sessionManager));
+    this.app.use('/api/webrtc', createWebRTCRouter(this.webrtcService, this.sessionManager));
 
     // Root endpoint
     this.app.get('/', (_req, res) => {
@@ -125,6 +131,13 @@ class VibeCoderHost {
         timestamp: new Date(),
       }));
     });
+  }
+
+  private setupCleanupTimer(): void {
+    // 5分間隔でクリーンアップ
+    setInterval(() => {
+      this.webrtcService.cleanupInactiveConnections();
+    }, 5 * 60 * 1000);
   }
 
   private handleWebSocketMessage(ws: any, data: any): void {
@@ -183,6 +196,7 @@ class VibeCoderHost {
     // Stop services
     this.claudeService.destroy();
     this.sessionManager.destroy();
+    this.webrtcService.destroy();
     
     // Close HTTP server
     return new Promise((resolve) => {

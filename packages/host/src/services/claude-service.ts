@@ -73,14 +73,16 @@ export class ClaudeService {
       
       // Split command into parts for spawn
       const parts = command.split(' ');
-      const cmd = parts[0]; // 'claude-code'
+      const cmd = parts[0]; // 'claude' or 'echo' (for testing)
       const args = parts.slice(1);
 
       const child = spawn(cmd, args, {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          CLAUDE_API_KEY: hostConfig.claudeApiKey,
+          // Claude Code will automatically read from ~/.claude or CLAUDE_CONFIG_PATH
+          CLAUDE_CONFIG_PATH: hostConfig.claudeConfigPath,
+          HOME: '/app', // Ensure claude-code looks in the right place
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       });

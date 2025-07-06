@@ -5,22 +5,25 @@ services:
     build:
       context: .
       dockerfile: packages/host/Dockerfile
-    container_name: vibe-coder-host
+      target: builder  # Use builder stage for development
+    container_name: vibe-coder-host-dev
     ports:
       - "8080:8080"
     volumes:
       - ./workspace:/app/workspace
       - ~/.claude:/app/.claude:ro
+      - ./packages/host/src:/app/packages/host/src  # Mount source for live reload
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - SIGNALING_SERVER_URL=${SIGNALING_SERVER_URL:-https://vibe-coder.space/api/signal}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - MAX_CONCURRENT_SESSIONS=${MAX_CONCURRENT_SESSIONS:-10}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-30000}
-      - ENABLE_SECURITY=${ENABLE_SECURITY:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - DEBUG=${DEBUG:-}
+      - SESSION_SECRET=${SESSION_SECRET:-development-secret-key-for-testing-minimum-32-characters-required}
+      - MAX_CONCURRENT_SESSIONS=5
+      - COMMAND_TIMEOUT=30000
+      - ENABLE_SECURITY=true
+      - LOG_LEVEL=debug
+      - DEBUG=vibe-coder:*
     restart: unless-stopped
+    command: ["npm", "run", "dev"]  # Use development command
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s

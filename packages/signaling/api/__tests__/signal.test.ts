@@ -74,6 +74,26 @@ describe('Signal API', () => {
     });
   });
 
+  describe('Session Management', () => {
+    it('should create session successfully', async () => {
+      const req = new NextRequest('http://localhost/api/signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'create-session',
+          sessionId: 'TEST1234',
+          hostId: 'HOST5678'
+        })
+      });
+
+      const response = await handler(req);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.message).toBe('Session created successfully');
+    });
+  });
+
   describe('Offer/Answer Exchange', () => {
     it('should store offer successfully', async () => {
       const offerData = {
@@ -230,6 +250,52 @@ describe('Signal API', () => {
       expect(response.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.answer).toEqual(answerData);
+    });
+  });
+
+  describe('ICE Candidate Exchange', () => {
+    it('should store and retrieve host candidates', async () => {
+      // First create session and offer
+      const createReq = new NextRequest('http://localhost/api/signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'create-session',
+          sessionId: 'TEST1234',
+          hostId: 'HOST5678'
+        })
+      });
+      await handler(createReq);
+
+      // Store host candidate
+      const candidateReq = new NextRequest('http://localhost/api/signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'candidate',
+          sessionId: 'TEST1234',
+          hostId: 'HOST5678',
+          candidate: { candidate: 'candidate:1 1 UDP 2122252543 192.168.1.1 54400 typ host' }
+        })
+      });
+
+      const storeResponse = await handler(candidateReq);
+      expect(storeResponse.status).toBe(200);
+
+      // Retrieve candidates from client perspective
+      const getReq = new NextRequest('http://localhost/api/signal', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'get-candidate',
+          sessionId: 'TEST1234',
+          hostId: 'CLIENT9999'
+        })
+      });
+
+      const getResponse = await handler(getReq);
+      const getData = await getResponse.json();
+
+      expect(getResponse.status).toBe(200);
+      expect(getData.success).toBe(true);
+      expect(getData.candidates).toHaveLength(1);
     });
   });
 

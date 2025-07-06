@@ -1,4 +1,4 @@
-import { isCommandSafe } from '../../../shared/src';
+import { isCommandSafe, SECURITY_CONFIG } from '../../../shared/src';
 import logger from './logger';
 
 export interface SecurityValidationResult {
@@ -33,11 +33,16 @@ export function validateCommand(command: string): SecurityValidationResult {
     };
   }
 
-  // Additional security checks for Claude Code specific commands
-  if (!trimmedCommand.startsWith('claude-code')) {
+  // Check if command starts with an allowed command
+  const commandStart = trimmedCommand.split(' ')[0];
+  const isAllowed = SECURITY_CONFIG.allowedCommands.some(allowedCmd => 
+    commandStart === allowedCmd || trimmedCommand.startsWith(allowedCmd + ' ')
+  );
+  
+  if (!isAllowed) {
     return {
       isValid: false,
-      reason: 'Only claude-code commands are allowed',
+      reason: `Command '${commandStart}' is not allowed. Only allowed commands: ${SECURITY_CONFIG.allowedCommands.join(', ')}`,
     };
   }
 

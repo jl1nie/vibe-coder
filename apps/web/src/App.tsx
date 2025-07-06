@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic,
   Settings,
-  Terminal,
   ChevronLeft,
   ChevronRight,
   Wifi,
@@ -12,13 +11,14 @@ import {
   CornerDownLeft
 } from 'lucide-react';
 import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
-import type { TerminalOutput, ConnectionStatus } from '@vibe-coder/shared';
+import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
 
 type ExecutionStatus = 'idle' | 'running' | 'awaitingInput' | 'cancelled' | 'completed';
 
 interface AppState {
   isRecording: boolean;
-  terminalOutput: TerminalOutput[];
   textInput: string;
   currentCommandIndex: number;
   showSettings: boolean;
@@ -26,11 +26,12 @@ interface AppState {
   voiceSupported: boolean;
   executionStatus: ExecutionStatus;
   promptMessage: string | null;
+  peerConnection: RTCPeerConnection | null;
+  dataChannel: RTCDataChannel | null;
 }
 
 const initialState: AppState = {
   isRecording: false,
-  terminalOutput: [],
   textInput: '',
   currentCommandIndex: 0,
   showSettings: false,
@@ -40,52 +41,298 @@ const initialState: AppState = {
   voiceSupported: false,
   executionStatus: 'idle',
   promptMessage: null,
+  peerConnection: null,
+  dataChannel: null,
 };
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const executionStateRef = useRef(state.executionStatus);
 
   useEffect(() => {
     executionStateRef.current = state.executionStatus;
   }, [state.executionStatus]);
 
-  // Initialize mock terminal output
+  // Initialize xterm.js terminal
   useEffect(() => {
-    const mockOutput: TerminalOutput[] = [
-      { id: '1', type: 'system', text: 'Vibe Coder initialized', timestamp: new Date() },
-      { id: '2', type: 'info', text: '🤖 Claude Code ready', timestamp: new Date() },
-      { id: '3', type: 'prompt', text: 'user@localhost:~/project$ ', timestamp: new Date() },
-    ];
-    setState(prev => ({ ...prev, terminalOutput: mockOutput }));
+    if (terminalRef.current && !xtermRef.current) {
+      const term = new Terminal({
+        fontFamily: 'monospace',
+        fontSize: 14,
+        theme: {
+          background: '#0f172a',
+          foreground: '#e2e8f0',
+          cursor: '#e2e8f0',
+          selectionBackground: 'rgba(255, 255, 255, 0.3)',
+        },
+      });
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalRef.current);
+      fitAddon.fit();
+
+      xtermRef.current = term;
+      fitAddonRef.current = fitAddon;
+
+      // Initial mock output to xterm.js
+      term.write('Vibe Coder initialized\r\n');
+      term.write('🤖 Claude Code ready\r\n');
+      term.write('user@localhost:~/project$ ');
+
+      // Handle resize
+      const handleResize = () => {
+        fitAddon.fit();
+      };
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        term.dispose();
+        window.removeEventListener('resize', handleResize);
+      };
+    }
   }, []);
-  
+
+  // WebRTC Connection Management
+  useEffect(() => {
+    const SIGNALING_SERVER_URL = 'http://localhost:8080';
+    let pc: RTCPeerConnection | null = null;
+    let dc: RTCDataChannel | null = null;
+    let sessionId: string | null = null;
+
+    const createPeerConnection = async () => {
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+        ],
+      });
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          // Send ICE candidate to signaling server
+          console.log('Sending ICE candidate:', event.candidate);
+          const signalMessage: SignalMessage = {
+            type: 'candidate',
+            sessionId: sessionId || '',
+            hostId: 'vibe-coder-host',
+            candidate: event.candidate.toJSON(),
+          };
+          fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(signalMessage),
+          }).catch(error => console.error('Failed to send ICE candidate:', error));
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('ICE connection state:', pc?.iceConnectionState);
+        setState(prev => ({
+          ...prev,
+          connectionStatus: { isConnected: pc?.iceConnectionState === 'connected' },
+        }));
+      };
+
+      pc.ondatachannel = (event) => {
+        dc = event.channel;
+        console.log('Data channel created:', dc);
+        setState(prev => ({ ...prev, dataChannel: dc }));
+
+        dc.onmessage = (event) => {
+          console.log('Data channel message:', event.data);
+          if (xtermRef.current) {
+            xtermRef.current.write(event.data);
+          }
+        };
+
+        dc.onopen = () => {
+          console.log('Data channel opened');
+          if (xtermRef.current) {
+            xtermRef.current.write('\r\nWebRTC Data Channel connected.\r\n');
+          }
+        };
+
+        dc.onclose = () => {
+          console.log('Data channel closed');
+          if (xtermRef.current) {
+            xtermRef.current.write('\r\nWebRTC Data Channel disconnected.\r\n');
+          }
+          setState(prev => ({ ...prev, dataChannel: null }));
+        };
+
+        dc.onerror = (error) => {
+          console.error('Data channel error:', error);
+          if (xtermRef.current) {
+            xtermRef.current.write(`\r\nData Channel Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
+          }
+        };
+      };
+
+      // Create data channel for sending messages
+      dc = pc.createDataChannel('terminal');
+      setState(prev => ({ ...prev, dataChannel: dc }));
+
+      // TODO: Implement offer/answer exchange with signaling server
+      // For now, just log initial state
+      console.log('Peer connection created.');
+    };
+
+    const initWebRTC = async () => {
+      // Generate a unique session ID (for simplicity, using a timestamp)
+      sessionId = `session-${Date.now()}`;
+
+      // Create a new session on the signaling server using unified API
+      try {
+        const createSessionMessage: SignalMessage = {
+          type: 'create-session',
+          sessionId: sessionId || '',
+          hostId: 'vibe-coder-host',
+        };
+        
+        const sessionResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(createSessionMessage),
+        });
+        const sessionData = await sessionResponse.json();
+        if (!sessionData.success) {
+          throw new Error(`Failed to create session: ${sessionData.error}`);
+        }
+        console.log('Session created successfully');
+
+        await createPeerConnection();
+
+        // Create offer and send to signaling server
+        const offer = await pc?.createOffer();
+        await pc?.setLocalDescription(offer);
+
+        const signalMessage: SignalMessage = {
+          type: 'offer',
+          sessionId: sessionId || '',
+          hostId: 'vibe-coder-host',
+          offer: { type: offer?.type as "offer", sdp: offer?.sdp || '' },
+        };
+
+        const signalResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signalMessage),
+        });
+        const signalData = await signalResponse.json();
+        if (!signalData.success) {
+          throw new Error(`Failed to send offer: ${signalData.error}`);
+        }
+        console.log('Offer sent to signaling server.');
+
+        // Poll for answer and ICE candidates from signaling server
+        let answerReceived = false;
+        
+        const pollForAnswer = async () => {
+          if (answerReceived) return;
+          
+          const getAnswerMessage: SignalMessage = {
+            type: 'get-answer',
+            sessionId: sessionId || '',
+            hostId: 'vibe-coder-host',
+          };
+          
+          const answerResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(getAnswerMessage),
+          });
+          const answerData = await answerResponse.json();
+
+          if (answerData.success && answerData.answer) {
+            console.log('Received answer:', answerData.answer);
+            const remoteDesc = new RTCSessionDescription(answerData.answer);
+            await pc?.setRemoteDescription(remoteDesc);
+            answerReceived = true;
+            if (xtermRef.current) {
+              xtermRef.current.write('\r\nWebRTC connection established.\r\n');
+            }
+          } else {
+            setTimeout(pollForAnswer, 1000); // Poll every 1 second
+          }
+        };
+
+        const pollForCandidates = async () => {
+          const getCandidatesMessage: SignalMessage = {
+            type: 'get-candidate',
+            sessionId: sessionId || '',
+            hostId: 'vibe-coder-host',
+          };
+          
+          try {
+            const candidatesResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(getCandidatesMessage),
+            });
+            const candidatesData = await candidatesResponse.json();
+
+            if (candidatesData.success && candidatesData.candidates?.length > 0) {
+              console.log('Received ICE candidates:', candidatesData.candidates);
+              for (const candidateData of candidatesData.candidates) {
+                try {
+                  const candidate = JSON.parse(candidateData.candidate);
+                  await pc?.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (error) {
+                  console.error('Failed to add ICE candidate:', error);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Failed to fetch ICE candidates:', error);
+          }
+          
+          // Continue polling for more candidates
+          setTimeout(pollForCandidates, 2000);
+        };
+
+        pollForAnswer();
+        pollForCandidates();
+
+      } catch (error: any) {
+        console.error('WebRTC initialization error:', error);
+        if (xtermRef.current) {
+          xtermRef.current.write(`\r\nWebRTC Init Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
+        }
+        setState(prev => ({ ...prev, connectionStatus: { isConnected: false } }));
+      }
+    };
+
+    initWebRTC();
+
+    return () => {
+      if (pc) {
+        pc.close();
+      }
+      if (dc) {
+        dc.close();
+      }
+    };
+  }, []);
+
   // Check voice recognition support
   useEffect(() => {
     const supported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
     setState(prev => ({ ...prev, voiceSupported: supported }));
   }, []);
-  
-  // Auto-scroll terminal
-  useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [state.terminalOutput]);
 
   // Handle ESC key for interruption
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && executionStateRef.current === 'running') {
+        if (xtermRef.current) {
+          xtermRef.current.write('\r\nExecution cancelled by user.\r\n');
+          xtermRef.current.write('user@localhost:~/project$ ');
+        }
         setState(prev => ({
           ...prev,
           executionStatus: 'cancelled',
-          terminalOutput: [
-            ...prev.terminalOutput,
-            { id: Date.now().toString(), type: 'error', text: 'Execution cancelled by user.', timestamp: new Date() },
-            { id: (Date.now() + 1).toString(), type: 'prompt', text: 'user@localhost:~/project$ ', timestamp: new Date() },
-          ],
         }));
       }
     };
@@ -96,64 +343,38 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const addOutput = (line: any) => {
-    setState(prev => ({
-      ...prev,
-      terminalOutput: [
-        ...prev.terminalOutput,
-        { ...(line as any), id: Date.now().toString(), timestamp: new Date() } as TerminalOutput
-      ]
-    }));
-  };
-
   const executeCommand = async (command: string) => {
+    if (xtermRef.current) {
+      xtermRef.current.write(`user@localhost:~/project$ ${command}\r\n`);
+    }
     setState(prev => ({
       ...prev,
       executionStatus: 'running',
-      terminalOutput: [
-        ...prev.terminalOutput,
-        { id: Date.now().toString(), type: 'command', text: `claude-code "${command}"`, timestamp: new Date() }
-      ]
     }));
 
-    await new Promise(r => setTimeout(r, 1000));
-    if (executionStateRef.current !== 'running') return;
-    addOutput({ type: 'info', text: '🤖 Analyzing project...' });
-
-    await new Promise(r => setTimeout(r, 1500));
-    if (executionStateRef.current !== 'running') return;
-    addOutput({ type: 'info', text: 'Found potential issues in 2 files. Do you want to proceed with the changes? [y/n]' });
-    
-    setState(prev => ({ ...prev, executionStatus: 'awaitingInput', promptMessage: 'y/n' }));
+    if (state.dataChannel && state.dataChannel.readyState === 'open') {
+      state.dataChannel.send(JSON.stringify({ type: 'command', command }));
+    } else {
+      if (xtermRef.current) {
+        xtermRef.current.write('\r\nWebRTC Data Channel is not open.\r\n');
+      }
+      setState(prev => ({ ...prev, executionStatus: 'idle' }));
+    }
   };
 
   const handlePromptResponse = async (response: string) => {
-    addOutput({ type: 'command', text: response, timestamp: new Date() });
-
-    if (response.toLowerCase() === 'y') {
-      setState(prev => ({ ...prev, executionStatus: 'running', promptMessage: null }));
-      
-      await new Promise(r => setTimeout(r, 1000));
-      if (executionStateRef.current !== 'running') return;
-      addOutput({ type: 'success', text: '✨ Generating code...' });
-
-      await new Promise(r => setTimeout(r, 2000));
-      if (executionStateRef.current !== 'running') return;
-      addOutput({ type: 'success', text: '🚀 Task completed successfully!' });
-
-    } else {
-      addOutput({ type: 'error', text: 'Operation aborted by user.' });
+    if (xtermRef.current) {
+      xtermRef.current.write(`${response}\r\n`);
     }
 
-    setState(prev => ({
-      ...prev,
-      executionStatus: 'completed',
-      promptMessage: null,
-      terminalOutput: [
-        ...prev.terminalOutput,
-        { id: (Date.now() + 1).toString(), type: 'prompt', text: 'user@localhost:~/project$ ', timestamp: new Date() },
-      ]
-    }));
+    if (state.dataChannel && state.dataChannel.readyState === 'open') {
+      state.dataChannel.send(JSON.stringify({ type: 'response', response }));
+    } else {
+      if (xtermRef.current) {
+        xtermRef.current.write('\r\nWebRTC Data Channel is not open.\r\n');
+      }
+      setState(prev => ({ ...prev, executionStatus: 'idle' }));
+    }
   };
   
   const handleTextSubmit = () => {
@@ -176,18 +397,6 @@ const App: React.FC = () => {
     }
   };
   
-  const getOutputStyle = (type: TerminalOutput['type']) => {
-    switch (type) {
-      case 'command': return 'text-white font-bold';
-      case 'success': return 'command-success';
-      case 'error': return 'command-error';
-      case 'info': return 'command-info';
-      case 'system': return 'command-warning';
-      case 'prompt': return 'command-prompt';
-      default: return 'text-gray-300';
-    }
-  };
-  
   const currentCommands = DEFAULT_PLAYLIST.commands;
   const visibleCommands = currentCommands.slice(state.currentCommandIndex, state.currentCommandIndex + 5);
   const isExecuting = state.executionStatus === 'running' || state.executionStatus === 'awaitingInput';
@@ -197,7 +406,7 @@ const App: React.FC = () => {
       {/* Header */}
       <div className="relative z-10 h-16 p-3 flex items-center justify-between glass-morphism safe-area-inset-top">
         <div className="flex items-center space-x-2">
-          <Terminal className="w-5 h-5 text-green-400" />
+          {/* <Terminal className="w-5 h-5 text-green-400" /> */}
           <div>
             <h1 className="text-lg font-bold">Vibe Coder</h1>
             <p className="text-xs opacity-80">Claude Code Mobile</p>
@@ -251,17 +460,7 @@ const App: React.FC = () => {
           ref={terminalRef}
           className="glass-morphism rounded-lg p-3 flex-1 overflow-y-auto terminal-output cursor-pointer hover:border-gray-600 transition-colors custom-scrollbar min-h-0"
         >
-          {state.terminalOutput.map((line) => (
-            <div key={line.id} className={`mb-1 ${getOutputStyle(line.type)}`}>
-              <span className="opacity-50 text-xs mr-2">
-                {line.timestamp.toLocaleTimeString().slice(0, 5)}
-              </span>
-              {line.text}
-              {line.type === 'prompt' && state.executionStatus === 'running' && (
-                <span className="animate-pulse text-green-400">▊</span>
-              )}
-            </div>
-          ))}
+          {/* xterm.js will render here */}
         </div>
       </div>
 
@@ -287,7 +486,11 @@ const App: React.FC = () => {
           {/* Cursor Control */}
           <div className="flex items-center ml-2">
             <button
-              onClick={() => addOutput({ type: 'info', text: 'Simulating cursor move: UP' })}
+              onClick={() => {
+                if (xtermRef.current) {
+                  xtermRef.current.write('\x1b[A'); // Simulate Up arrow key
+                }
+              }}
               className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center mr-1"
               title="Cursor Up"
               disabled={isExecuting}
@@ -295,7 +498,11 @@ const App: React.FC = () => {
               <ArrowUp className="w-4 h-4" />
             </button>
             <button
-              onClick={() => addOutput({ type: 'info', text: 'Simulating cursor move: DOWN' })}
+              onClick={() => {
+                if (xtermRef.current) {
+                  xtermRef.current.write('\x1b[B'); // Simulate Down arrow key
+                }
+              }}
               className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center"
               title="Cursor Down"
               disabled={isExecuting}
@@ -406,4 +613,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

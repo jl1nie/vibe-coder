@@ -32,13 +32,15 @@ export const SessionSchema = z.object({
 });
 
 export const WebRTCOfferSchema = z.object({
-  type: z.literal('offer'),
+  sessionId: z.string().optional(),
   sdp: z.string(),
+  timestamp: z.number(),
 });
 
 export const WebRTCAnswerSchema = z.object({
-  type: z.literal('answer'),
+  sessionId: z.string().optional(),
   sdp: z.string(),
+  timestamp: z.number(),
 });
 
 export const WebRTCIceCandidateSchema = z.object({
@@ -116,11 +118,12 @@ export interface HostInfo {
 
 // シグナリングサーバー用の型定義
 export const SignalMessageSchema = z.object({
-  type: z.enum(['offer', 'answer', 'get-offer', 'get-answer']),
+  type: z.enum(['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate']),
   sessionId: z.string(),
   hostId: z.string(),
   offer: WebRTCOfferSchema.optional(),
   answer: WebRTCAnswerSchema.optional(),
+  candidate: z.any().optional(), // RTCIceCandidateInit is not directly available in Zod
 });
 
 export const SignalResponseSchema = z.object({
@@ -128,6 +131,7 @@ export const SignalResponseSchema = z.object({
   message: z.string().optional(),
   offer: WebRTCOfferSchema.optional(),
   answer: WebRTCAnswerSchema.optional(),
+  candidates: z.array(WebRTCIceCandidateSchema).optional(), // 追加
 });
 
 export const SessionInfoSchema = z.object({
@@ -144,7 +148,21 @@ export const SessionResponseSchema = z.object({
   sessionInfo: SessionInfoSchema.optional(),
 });
 
-export type SignalMessage = z.infer<typeof SignalMessageSchema>;
-export type SignalResponse = z.infer<typeof SignalResponseSchema>;
+export interface SignalMessage {
+  type: 'create-session' | 'offer' | 'answer' | 'get-offer' | 'get-answer' | 'candidate' | 'get-candidate';
+  sessionId: string;
+  hostId: string;
+  offer?: WebRTCOffer;
+  answer?: WebRTCAnswer;
+  candidate?: any; // RTCIceCandidateInit
+}
+
+export interface SignalResponse {
+  success: boolean;
+  message?: string;
+  offer?: WebRTCOffer;
+  answer?: WebRTCAnswer;
+  candidates?: WebRTCIceCandidate[];
+}
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
 export type SessionResponse = z.infer<typeof SessionResponseSchema>;
