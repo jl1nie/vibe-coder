@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# --- Helper Functions ---
+
+# Function to print usage information
+usage() {
+  echo "Usage: $0 {start|stop|logs|status|clean}"
+  echo "Commands:"
+  echo "  start   : Start the development environment (docker-compose up)."
+  echo "  stop    : Stop the development environment (docker-compose down)."
+  echo "  logs    : Follow the logs of the services."
+  echo "  status  : Show the status of the services."
+  echo "  clean   : Stop services and remove unused docker images."
+}
+
+# --- Main Script ---
+
+# Check if a subcommand is provided
+if [ -z "$1" ]; then
+  usage
+  exit 1
+fi
+
+# Navigate to the script's directory to ensure paths are correct
+cd "$(dirname "$0")/.."
+
+# Subcommand handling
+case "$1" in
+  start)
+    echo "Starting development environment..."
+    export HOST_UID=$(id -u)
+    export HOST_GID=$(id -g)
+    docker-compose -f docker-compose.dev.yml up --build -d
+    echo "Environment started."
+    ;;
+  stop)
+    echo "Stopping development environment..."
+    docker-compose -f docker-compose.dev.yml down
+    echo "Environment stopped."
+    ;;
+  logs)
+    echo "Following logs..."
+    docker-compose -f docker-compose.dev.yml logs -f
+    ;;
+  status)
+    echo "Checking status..."
+    docker-compose -f docker-compose.dev.yml ps
+    ;;
+  clean)
+    echo "Cleaning up environment..."
+    docker-compose -f docker-compose.dev.yml down
+    docker image prune -f
+    echo "Cleanup complete."
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

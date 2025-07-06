@@ -179,9 +179,9 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 - **Husky**: Git hooks管理
 
 **開発環境:**
-- **WSL2**（Linux環境での開発）
-- React開発サーバー（localhost:3000）
-- Vercel CLI（ローカルEdge Functions テスト）
+- **Docker**: ホストサーバーはDockerコンテナで開発し、ファイルパーミッションの問題を解決しています。
+- **Vite**: フロントエンド(PWA)の開発サーバーとして利用します。
+- **Vercel CLI**: シグナリングサーバーのローカルテストに利用します。
 
 **Docker配布:**
 - **レジストリ**: Docker Hub `jl1nie/vibe-coder:latest`

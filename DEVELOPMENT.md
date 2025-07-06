@@ -81,15 +81,37 @@ TEST_TIMEOUT=30000
 
 ### 3. 開発サーバーの起動
 
-```bash
-# 全てのサービスを一括起動
-pnpm dev
+Vibe Coderはモノレポ構成であり、各サービスを個別に、または組み合わせて起動できます。
 
-# または個別に起動
-pnpm dev:web          # PWA (http://localhost:3000)
-pnpm dev:host         # ホストサーバー (http://localhost:8080)
-pnpm dev:signaling    # シグナリングサーバー (http://localhost:3001)
+#### ホストサーバー (バックエンド)
+
+バックエンド開発はDockerコンテナで行います。これにより、ファイルパーミッションの問題を回避し、本番に近い環境で開発できます。
+
+```bash
+# ホストサーバーをDockerで起動
+npm run start
 ```
+コンテナを停止するには `npm run stop` を使用します。
+
+#### PWA (フロントエンド)
+
+UIの開発を行う場合、Viteの開発サーバーを起動します。
+
+```bash
+# PWAの開発サーバーを起動
+pnpm --filter @vibe-coder/web dev
+```
+
+#### シグナリングサーバー
+
+シグナリング機能の開発にはVercel CLIが必要です。
+
+```bash
+# シグナリングサーバーをローカルで起動
+pnpm --filter @vibe-coder/signaling dev
+```
+
+**注意:** ルートディレクトリで `pnpm dev` を実行すると、`turbo` が全てのパッケージの `dev` スクリプトを実行しようとします。これには、Dockerで管理しているホストサーバーをコンテナ外で起動しようとする動作も含まれるため、ポートの競合など意図しない問題が発生する可能性があります。開発時は、上記のように必要なサービスを個別に起動することを推奨します。
 
 ### 4. 開発ツールの確認
 
@@ -209,20 +231,33 @@ docker build -f docker/host/Dockerfile.prod .
 ### 基本テスト実行
 
 ```bash
-# 全テスト実行
+# 全てのユニットテストを実行
 pnpm test
 
-# 監視モードでテスト実行
+# 監視モードでユニットテストを実行
 pnpm test:watch
 
-# カバレッジ付きテスト実行
+# カバレッジ付きでユニットテストを実行
 pnpm test:coverage
+```
 
-# 個別パッケージテスト
-pnpm test:web          # PWA
-pnpm test:host         # ホストサーバー
-pnpm test:signaling    # シグナリングサーバー
-pnpm test:shared       # 共有ライブラリ
+### E2E テスト実行
+
+E2EテストはPlaywrightを使用します。テストを実行する前に、開発環境が起動している必要があります。
+
+```bash
+# 1. 開発環境を起動
+npm run start
+
+# 2. 別のターミナルでE2Eテストを実行
+pnpm run test:e2e
+```
+
+ローカルでのテスト用に、`test:local` スクリプトも用意されています。これは内部でPlaywrightの`webServer`機能を使用し、テスト実行前に開発サーバーを自動的に起動します。
+
+```bash
+# 開発サーバーの起動とE2Eテストの実行を自動で行う
+pnpm run test:local
 ```
 
 ### テスト種別

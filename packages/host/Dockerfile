@@ -1,11 +1,25 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Add security and process management packages
+RUN apk add --no-cache dumb-init su-exec
+
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
 WORKDIR /app
+
+# Change ownership of the app directory
+RUN chown -R nodejs:nodejs /app
+
+# Switch to the non-root user
+USER nodejs
 
 # Install pnpm and Claude Code
 RUN npm install -g pnpm@latest
 RUN npm install -g @anthropic-ai/claude-code
+
 
 # Copy package files
 COPY package.json pnpm-lock.yaml turbo.json ./

@@ -22,12 +22,14 @@
     "test": "turbo run test",
     "test:ux": "playwright test",
     "test:e2e": "playwright test --config=playwright.config.ts",
-    "test:local": "concurrently \"npm run dev\" \"npm run test:ux\"",
+    "test:local": "playwright test --config=playwright.config.ts",
     "clean": "turbo run clean",
-    "vibe-coder": "docker-compose up -d",
-    "vibe-coder:stop": "docker-compose down",
-    "vibe-coder:logs": "docker-compose logs -f",
-    "vibe-coder:status": "docker-compose ps"
+    "vibe-coder": "./scripts/vibe-coder",
+    "start": "./scripts/vibe-coder start",
+    "stop": "./scripts/vibe-coder stop",
+    "logs": "./scripts/vibe-coder logs",
+    "status": "./scripts/vibe-coder status",
+    "clean:env": "./scripts/vibe-coder clean"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

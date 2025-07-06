@@ -114,29 +114,35 @@ SIGNALING_SERVER_URL=https://signal.vibe-coder.space
 ### 5️⃣ Vibe Coder の起動
 
 ```bash
-# Vibe Coder を起動（公式Dockerイメージを自動利用）
-npm run vibe-coder
+# Vibe Coder を起動
+npm run start
 ```
 
 **これだけで完了！** 🎉
-- 公式Dockerイメージを自動でプル・起動
-- ホストサーバーが http://localhost:8080 で利用可能
-- PWAは https://vibe-coder.space でアクセス
+- 開発用のDockerコンテナが起動します。
+- ホストサーバーが http://localhost:8080 で利用可能になります。
+- PWAは https://vibe-coder.space でアクセスできます。
 
 ### 6️⃣ アクセス
 
 - **PWA**: https://vibe-coder.space （推奨）
-- **ホストサーバー**: http://localhost:8080
-- **API**: http://localhost:8080/api-docs
-- **ヘルス**: http://localhost:8080/health
+- **ホストサーバー (開発環境)**: http://localhost:8080
+- **APIドキュメント**: http://localhost:8080/api-docs
+- **ヘルスチェック**: http://localhost:8080/health
 
 ## 📱 使い方
 
 ### 🔌 接続方法
 
-1. **PWAを開く**: スマートフォンでPWAにアクセス
-2. **サーバーIDを入力**: ホストサーバーのIDを入力
-3. **接続**: WebRTC P2P接続が自動で確立
+1. **開発環境を起動**:
+   ```bash
+   npm run start
+   ```
+2. **PWAを開く**: スマートフォンでPWAにアクセス
+3. **サーバーIDを入力**: ターミナルに表示される8桁のサーバーIDを入力
+4. **接続**: WebRTC P2P接続が自動で確立
+
+(以降の使い方は変更なし)
 
 ### 🎤 音声コマンド
 
@@ -272,23 +278,19 @@ vibe-coder/
 ### 🛠️ 開発コマンド
 
 ```bash
-# Vibe Coder 起動・操作
-npm run vibe-coder          # 起動
-npm run vibe-coder stop     # 停止
-npm run vibe-coder restart  # 再起動
-npm run vibe-coder status   # 状態確認
-npm run vibe-coder logs     # ログ確認
-npm run vibe-coder build    # ローカルビルド
+# Vibe Coder 開発環境の操作
+npm start                   # 開発環境を起動
+npm stop                    # 開発環境を停止
+npm run logs                # ログを確認
+npm run status              # 状態を確認
+npm run clean:env           # 環境をクリーンアップ（コンテナとイメージを削除）
 
-# 開発・テスト
+# コード品質とテスト
 npm run lint                # ESLint
 npm run format              # Prettier
 npm run typecheck           # TypeScript
 npm test                    # Unit tests
-
-# Docker (上級者・メンテナー用)
-npm run docker:build        # ローカルイメージビルド
-npm run docker:push         # Docker Hub プッシュ（メンテナー専用）
+npm run test:e2e            # E2E tests
 ```
 
 ### 🔍 デバッグ
