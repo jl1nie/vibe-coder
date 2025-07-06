@@ -411,10 +411,17 @@ VERCEL_SIGNALING_PROJECT_ID=signaling-project-id
 
 ## 📚 関連文書
 
-- [📋 CONFIG_DOCUMENTATION.md](./CONFIG_DOCUMENTATION.md) - 設定ファイルの詳細
-- [🚀 DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) - デプロイメント手順
-- [🔒 SECURITY.md](./SECURITY.md) - セキュリティガイド
-- [🧪 UX_TEST_SUMMARY.md](./UX_TEST_SUMMARY.md) - UXテスト結果
+### ユーザー向け
+- **[🚀 クイックスタート](#-クイックスタート)** - すぐに始める方法
+- **[📱 使い方](#-使い方)** - 基本的な操作方法
+- **[🎵 プレイリスト管理](#-プレイリスト管理)** - カスタムコマンドの作成
+
+### 開発者向け
+- **[💻 DEVELOPMENT.md](./DEVELOPMENT.md)** - 開発環境構築・ビルド・テスト実行の詳細手順
+- **[📋 CONFIG_DOCUMENTATION.md](./CONFIG_DOCUMENTATION.md)** - 設定ファイルの詳細
+- **[🚀 DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md)** - デプロイメント手順
+- **[🔒 SECURITY.md](./SECURITY.md)** - セキュリティガイド
+- **[🧪 UX_TEST_SUMMARY.md](./UX_TEST_SUMMARY.md)** - UXテスト結果
 
 ## 📄 ライセンス
 

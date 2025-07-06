@@ -2,30 +2,30 @@
   "name": "@vibe-coder/signaling",
   "version": "0.1.0",
   "private": true,
-  "description": "Vibe Coder WebRTC Signaling Server",
-  "main": "api/index.js",
+  "description": "Vibe Coder Signaling Server - WebRTC signaling via Vercel Edge Functions",
   "scripts": {
-    "dev": "vercel dev",
     "build": "tsc",
+    "start": "vercel dev",
     "deploy": "vercel --prod",
-    "deploy:preview": "vercel",
+    "clean": "rm -rf .vercel dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint api --ext .ts --report-unused-disable-directives --max-warnings 0",
     "test": "vitest",
-    "lint": "eslint . --ext .ts,.js",
-    "typecheck": "tsc --noEmit"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@vercel/kv": "catalog:",
-    "@vercel/postgres": "catalog:",
-    "zod": "catalog:",
-    "jose": "catalog:"
+    "@vibe-coder/shared": "workspace:*",
+    "@vercel/edge": "^1.1.1",
+    "next": "^14.0.0"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@vercel/node": "catalog:",
-    "typescript": "catalog:",
-    "eslint": "catalog:",
-    "@typescript-eslint/eslint-plugin": "catalog:",
-    "@typescript-eslint/parser": "catalog:",
-    "vitest": "catalog:"
+    "@types/node": "^20.10.0",
+    "@vercel/node": "^3.0.21",
+    "typescript": "^5.3.0",
+    "vitest": "^0.34.6",
+    "@vitest/coverage-v8": "^0.34.6",
+    "eslint": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0"
   }
 }

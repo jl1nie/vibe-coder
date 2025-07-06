@@ -1,169 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    
-    <!-- PWA Meta Tags -->
-    <meta name="application-name" content="Vibe Coder" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境" />
+    <meta name="theme-color" content="#1e293b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Vibe Coder" />
-    <meta name="format-detection" content="telephone=no" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#1e40af" />
-    
-    <!-- SEO Meta Tags -->
-    <meta name="description" content="スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境" />
-    <meta name="keywords" content="Claude Code, PWA, モバイル開発, リモート開発, WebRTC" />
-    <meta name="author" content="Vibe Coder Team" />
-    
-    <!-- Open Graph -->
-    <meta property="og:title" content="Vibe Coder" />
-    <meta property="og:description" content="スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境" />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://vibe-coder.space" />
-    <meta property="og:image" content="/og-image.png" />
-    <meta property="og:site_name" content="Vibe Coder" />
-    <meta property="og:locale" content="ja_JP" />
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Vibe Coder" />
-    <meta name="twitter:description" content="スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境" />
-    <meta name="twitter:image" content="/og-image.png" />
-    
-    <!-- Preconnect for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    
-    <!-- Icons -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#1e40af" />
-    
-    <!-- Disable default mobile browser behaviors -->
-    <style>
-      /* Prevent zoom on input focus */
-      input, select, textarea, button {
-        font-size: 16px !important;
-      }
-      
-      /* Safe area support */
-      :root {
-        --safe-area-inset-top: env(safe-area-inset-top);
-        --safe-area-inset-right: env(safe-area-inset-right);
-        --safe-area-inset-bottom: env(safe-area-inset-bottom);
-        --safe-area-inset-left: env(safe-area-inset-left);
-      }
-      
-      /* Prevent default touch behaviors */
-      * {
-        -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-      }
-      
-      /* Loading screen */
-      #loading-screen {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        font-family: 'Inter', sans-serif;
-      }
-      
-      .loading-content {
-        text-align: center;
-        color: white;
-      }
-      
-      .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid rgba(255, 255, 255, 0.3);
-        border-top: 3px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 1rem;
-      }
-      
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-      
-      .loading-text {
-        font-size: 1.125rem;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-      }
-      
-      .loading-subtitle {
-        font-size: 0.875rem;
-        opacity: 0.8;
-      }
-    </style>
-    
-    <title>Vibe Coder - モバイル最適化リモート開発環境</title>
+    <link rel="manifest" href="/manifest.json" />
+    <title>Vibe Coder - Mobile Claude Code</title>
   </head>
-  <body class="font-sans antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-    <!-- Loading Screen -->
-    <div id="loading-screen">
-      <div class="loading-content">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Vibe Coder</div>
-        <div class="loading-subtitle">Starting up...</div>
-      </div>
-    </div>
-    
-    <!-- App Root -->
+  <body class="overscroll-none">
     <div id="root"></div>
-    
-    <!-- PWA Install Prompt Fallback -->
-    <div id="pwa-install-prompt" style="display: none;">
-      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center p-4 z-50">
-        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full">
-          <h3 class="text-lg font-semibold mb-2">アプリをインストール</h3>
-          <p class="text-gray-600 dark:text-gray-400 mb-4">
-            Vibe Coderをホーム画面に追加して、より快適にご利用いただけます。
-          </p>
-          <div class="flex gap-3">
-            <button id="install-button" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium">
-              インストール
-            </button>
-            <button id="dismiss-button" class="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 py-2 px-4 rounded-lg font-medium">
-              後で
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
     <script type="module" src="/src/main.tsx"></script>
-    
-    <!-- Remove loading screen after app loads -->
-    <script>
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const loadingScreen = document.getElementById('loading-screen');
-          if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            loadingScreen.style.transition = 'opacity 0.3s ease-out';
-            setTimeout(() => {
-              loadingScreen.remove();
-            }, 300);
-          }
-        }, 500);
-      });
-    </script>
   </body>
 </html>

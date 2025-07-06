@@ -1,71 +1,81 @@
-import { Router, Request, Response } from 'express';
-import { createLogger } from '@vibe-coder/shared';
+import { Router } from 'express';
+import { ClaudeService } from '../services/claude-service';
+import { SessionManager } from '../services/session-manager';
+import { HealthStatus } from '../types';
+import { asyncHandler } from '../middleware/error';
 
-const logger = createLogger('health-routes');
-const router = Router();
+export function createHealthRouter(
+  claudeService: ClaudeService,
+  sessionManager: SessionManager
+): Router {
+  const router = Router();
 
-// ヘルスチェックエンドポイント
-router.get('/', (req: Request, res: Response) => {
-  const healthData = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    version: process.env.npm_package_version || '0.1.0',
-    nodeVersion: process.version,
-    pid: process.pid,
-  };
+  router.get('/health', asyncHandler(async (_req, res) => {
+    const startTime = Date.now();
+    
+    // Check Claude Code availability
+    const claudeAvailable = await claudeService.healthCheck();
+    
+    // Get system information
+    const memUsage = process.memoryUsage();
+    const uptime = process.uptime();
+    
+    // Get session information
+    const activeSessions = sessionManager.getActiveSessions();
+    const totalSessions = sessionManager.getTotalSessions();
+    
+    const health: HealthStatus = {
+      status: claudeAvailable ? 'healthy' : 'degraded',
+      timestamp: new Date(),
+      uptime,
+      sessions: {
+        active: activeSessions.length,
+        total: totalSessions,
+      },
+      memory: {
+        used: memUsage.heapUsed,
+        total: memUsage.heapTotal,
+        percentage: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
+      },
+      claude: {
+        available: claudeAvailable,
+        lastCheck: new Date(),
+      },
+    };
 
-  res.json(healthData);
-});
-
-// 詳細ヘルスチェック
-router.get('/detailed', (req: Request, res: Response) => {
-  const detailed = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    system: {
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      cpuUsage: process.cpuUsage(),
-      version: process.env.npm_package_version || '0.1.0',
-      nodeVersion: process.version,
-      platform: process.platform,
-      arch: process.arch,
-      pid: process.pid,
-    },
-    environment: {
-      nodeEnv: process.env.NODE_ENV || 'unknown',
-      claudeApiConfigured: !!process.env.CLAUDE_API_KEY,
-      workspaceDir: process.env.WORKSPACE_DIR || '/app/workspace',
-    },
-  };
-
-  res.json(detailed);
-});
-
-// Ready check（Kubernetes ready probe用）
-router.get('/ready', (req: Request, res: Response) => {
-  // Claude APIキーの存在確認
-  if (!process.env.CLAUDE_API_KEY) {
-    return res.status(503).json({
-      status: 'not-ready',
-      reason: 'Claude API key not configured',
+    const responseTime = Date.now() - startTime;
+    
+    res.status(health.status === 'healthy' ? 200 : 503).json({
+      ...health,
+      responseTime,
     });
-  }
+  }));
 
-  res.json({
-    status: 'ready',
-    timestamp: new Date().toISOString(),
+  router.get('/health/live', (_req, res) => {
+    // Simple liveness probe
+    res.status(200).json({
+      status: 'alive',
+      timestamp: new Date(),
+    });
   });
-});
 
-// Live check（Kubernetes liveness probe用）
-router.get('/live', (req: Request, res: Response) => {
-  res.json({
-    status: 'alive',
-    timestamp: new Date().toISOString(),
-  });
-});
+  router.get('/health/ready', asyncHandler(async (_req, res) => {
+    // Readiness probe - check if service can handle requests
+    const claudeAvailable = await claudeService.healthCheck();
+    const memUsage = process.memoryUsage();
+    const memoryPressure = (memUsage.heapUsed / memUsage.heapTotal) > 0.9;
+    
+    const ready = claudeAvailable && !memoryPressure;
+    
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ready' : 'not-ready',
+      checks: {
+        claude: claudeAvailable,
+        memory: !memoryPressure,
+      },
+      timestamp: new Date(),
+    });
+  }));
 
-export { router as healthRouter };
+  return router;
+}

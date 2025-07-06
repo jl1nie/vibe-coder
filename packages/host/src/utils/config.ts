@@ -1,0 +1,51 @@
+import { config } from 'dotenv';
+import { z } from 'zod';
+import { HostConfig } from '../types';
+
+// Load environment variables
+config();
+
+const ConfigSchema = z.object({
+  PORT: z.string().default('8080'),
+  CLAUDE_API_KEY: z.string().min(1, 'Claude API key is required'),
+  SIGNALING_SERVER_URL: z.string().url().default('https://signal.vibe-coder.space'),
+  SESSION_SECRET: z.string().min(32, 'Session secret must be at least 32 characters'),
+  MAX_CONCURRENT_SESSIONS: z.string().default('10'),
+  COMMAND_TIMEOUT: z.string().default('30000'),
+  ENABLE_SECURITY: z.string().default('true'),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+});
+
+function validateConfig(): HostConfig {
+  try {
+    const env = ConfigSchema.parse(process.env);
+    
+    return {
+      port: parseInt(env.PORT, 10),
+      claudeApiKey: env.CLAUDE_API_KEY,
+      signalingServerUrl: env.SIGNALING_SERVER_URL,
+      sessionSecret: env.SESSION_SECRET,
+      maxConcurrentSessions: parseInt(env.MAX_CONCURRENT_SESSIONS, 10),
+      commandTimeout: parseInt(env.COMMAND_TIMEOUT, 10),
+      enableSecurity: env.ENABLE_SECURITY === 'true',
+      logLevel: env.LOG_LEVEL,
+    };
+  } catch (error) {
+    console.error('Configuration validation failed:', error);
+    process.exit(1);
+  }
+}
+
+export const hostConfig = validateConfig();
+
+export function getRequiredEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Required environment variable ${name} is not set`);
+  }
+  return value;
+}
+
+export function getOptionalEnvVar(name: string, defaultValue: string): string {
+  return process.env[name] || defaultValue;
+}

@@ -2,31 +2,23 @@
   "name": "@vibe-coder/shared",
   "version": "0.1.0",
   "private": true,
-  "description": "共通型定義とユーティリティ",
+  "description": "Shared utilities and types for Vibe Coder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest",
-    "test:watch": "vitest --watch",
-    "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "zod": "catalog:"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "^5.3.0",
+    "vitest": "^0.34.6",
+    "@vitest/coverage-v8": "^0.34.6"
   },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "restricted"
+  "dependencies": {
+    "zod": "^3.22.4"
   }
 }

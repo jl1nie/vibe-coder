@@ -1,110 +1,165 @@
-export const VIBE_CODER_VERSION = '0.1.0';
-
-export const DEFAULT_PORTS = {
-  HOST: 3000,
-  WEBSOCKET: 8080,
-  DEV_SERVER: 5173,
-} as const;
-
-export const WEBSOCKET_EVENTS = {
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  SIGNAL: 'signal',
-  COMMAND: 'command',
-  OUTPUT: 'output',
-  ERROR: 'error',
-  SESSION_START: 'session_start',
-  SESSION_END: 'session_end',
-} as const;
-
-export const COMMAND_CATEGORIES = {
-  DEVELOPMENT: 'development',
-  SECURITY: 'security',
-  TESTING: 'testing',
-  DEPLOYMENT: 'deployment',
-  DEBUGGING: 'debugging',
-  CUSTOM: 'custom',
-} as const;
-
-export const SUPPORTED_LANGUAGES = [
-  'ja-JP',
-  'en-US',
-  'ko-KR',
-  'zh-CN',
-  'es-ES',
-  'fr-FR',
-  'de-DE',
-] as const;
-
-export const SECURITY_LIMITS = {
-  MAX_COMMAND_LENGTH: 1000,
-  MAX_SESSION_TIME: 3600000, // 1 hour in ms
-  MAX_CONCURRENT_SESSIONS: 5,
-  RATE_LIMIT_PER_SECOND: 10,
-  RATE_LIMIT_PER_MINUTE: 100,
-  RATE_LIMIT_PER_HOUR: 1000,
-} as const;
-
-export const DANGEROUS_PATTERNS = [
-  /rm\s+-rf?\s*[\/\*]/,
-  /sudo\s+(?!claude-code)/,
-  /eval\s*\(/,
-  /exec\s*\(/,
-  /system\s*\(/,
-  /curl.*\|\s*sh/,
-  /wget.*\|\s*sh/,
-  /\$\(.*\)/,
-  /`.*`/,
-  />\s*\/dev\/null/,
-  /chmod\s+777/,
-  /chown\s+root/,
-] as const;
+export const SIGNALING_SERVER_URL = 'https://signal.vibe-coder.space';
+export const PWA_URL = 'https://vibe-coder.space';
 
 export const WEBRTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
   ],
-  iceCandidatePoolSize: 10,
-} as const;
+};
 
-export const ERROR_CODES = {
-  // Connection errors
-  CONNECTION_FAILED: 'CONNECTION_FAILED',
-  CONNECTION_TIMEOUT: 'CONNECTION_TIMEOUT',
-  WEBRTC_ERROR: 'WEBRTC_ERROR',
-  
-  // Security errors
-  COMMAND_BLOCKED: 'COMMAND_BLOCKED',
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  
-  // Session errors
-  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
-  SESSION_EXPIRED: 'SESSION_EXPIRED',
-  MAX_SESSIONS_REACHED: 'MAX_SESSIONS_REACHED',
-  
-  // Command errors
-  COMMAND_FAILED: 'COMMAND_FAILED',
-  COMMAND_TIMEOUT: 'COMMAND_TIMEOUT',
-  INVALID_COMMAND: 'INVALID_COMMAND',
-  
-  // General errors
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  NOT_FOUND: 'NOT_FOUND',
-} as const;
+export const SESSION_CONFIG = {
+  expirationTime: 24 * 60 * 60 * 1000, // 24 hours
+  maxRetries: 3,
+  retryDelay: 1000,
+};
 
-export const MIME_TYPES = {
-  JSON: 'application/json',
-  TEXT: 'text/plain',
-  HTML: 'text/html',
-  CSS: 'text/css',
-  JS: 'application/javascript',
-  PNG: 'image/png',
-  JPEG: 'image/jpeg',
-  SVG: 'image/svg+xml',
+export const COMMAND_TIMEOUT = 30000; // 30 seconds
+export const CONNECTION_TIMEOUT = 10000; // 10 seconds
+export const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+
+export const DEFAULT_PLAYLIST: {
+  schema: 'vibe-coder-playlist-v1';
+  metadata: {
+    name: string;
+    description: string;
+    author: string;
+    version: string;
+    tags: string[];
+  };
+  commands: Array<{
+    icon: string;
+    label: string;
+    command: string;
+    description: string;
+  }>;
+} = {
+  schema: 'vibe-coder-playlist-v1',
+  metadata: {
+    name: 'Claude Code Essentials',
+    description: 'Essential commands for Claude Code development',
+    author: 'Claude Team',
+    version: '1.0.0',
+    tags: ['claude-code', 'development', 'essential'],
+  },
+  commands: [
+    {
+      icon: '🔐',
+      label: 'Login',
+      command: 'add user authentication with login and signup',
+      description: 'Add authentication system to the project',
+    },
+    {
+      icon: '🐛',
+      label: 'Fix Bug',
+      command: 'find and fix the bug in this code',
+      description: 'Analyze and fix bugs in the current codebase',
+    },
+    {
+      icon: '📱',
+      label: 'Mobile',
+      command: 'make this responsive for mobile devices',
+      description: 'Optimize the UI for mobile devices',
+    },
+    {
+      icon: '🧪',
+      label: 'Test',
+      command: 'write unit tests for this component',
+      description: 'Generate comprehensive unit tests',
+    },
+    {
+      icon: '🎨',
+      label: 'Style',
+      command: 'improve the UI design and styling',
+      description: 'Enhance the visual design and user experience',
+    },
+    {
+      icon: '⚡',
+      label: 'Optimize',
+      command: 'optimize performance and loading speed',
+      description: 'Improve application performance',
+    },
+    {
+      icon: '📝',
+      label: 'Docs',
+      command: 'add documentation and comments',
+      description: 'Generate documentation and code comments',
+    },
+    {
+      icon: '🔄',
+      label: 'Refactor',
+      command: 'refactor this code for better readability',
+      description: 'Improve code structure and maintainability',
+    },
+    {
+      icon: '🌙',
+      label: 'Dark Mode',
+      command: 'add dark mode support',
+      description: 'Implement dark mode theme',
+    },
+    {
+      icon: '📊',
+      label: 'API',
+      command: 'create a REST API endpoint',
+      description: 'Build RESTful API endpoints',
+    },
+  ],
+};
+
+export const VOICE_RECOGNITION_CONFIG = {
+  lang: 'ja-JP',
+  continuous: true,
+  interimResults: true,
+  maxAlternatives: 1,
+};
+
+export const TERMINAL_CONFIG = {
+  theme: {
+    background: '#1e1e1e',
+    foreground: '#ffffff',
+    cursor: '#00ff00',
+  },
+  fontSize: 14,
+  fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+  cursorBlink: true,
+  scrollback: 1000,
+};
+
+export const SECURITY_CONFIG = {
+  allowedCommands: [
+    'claude-code',
+    'npm',
+    'yarn',
+    'pnpm',
+    'git',
+    'ls',
+    'cat',
+    'echo',
+    'pwd',
+    'cd',
+  ],
+  dangerousPatterns: [
+    'rm -rf',
+    'sudo',
+    'su',
+    'chmod',
+    'chown',
+    'kill',
+    'killall',
+    'pkill',
+    '> /dev/null',
+    '&& rm',
+    '|| rm',
+    '; rm',
+  ],
+};
+
+export const ERROR_MESSAGES = {
+  CONNECTION_FAILED: 'Failed to connect to host',
+  INVALID_SESSION: 'Invalid session ID',
+  AUTHENTICATION_FAILED: 'Authentication failed',
+  COMMAND_TIMEOUT: 'Command execution timeout',
+  VOICE_NOT_SUPPORTED: 'Voice recognition not supported',
+  WEBRTC_NOT_SUPPORTED: 'WebRTC not supported',
+  DANGEROUS_COMMAND: 'Command blocked for security reasons',
 } as const;
