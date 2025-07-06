@@ -16,6 +16,16 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 
 type ExecutionStatus = 'idle' | 'running' | 'awaitingInput' | 'cancelled' | 'completed';
+type AuthStatus = 'unauthenticated' | 'entering_host_id' | 'entering_totp' | 'authenticated';
+
+interface AuthState {
+  status: AuthStatus;
+  hostId: string;
+  sessionId: string | null;
+  totpSecret: string | null;
+  jwt: string | null;
+  error: string | null;
+}
 
 interface AppState {
   isRecording: boolean;
@@ -28,6 +38,7 @@ interface AppState {
   promptMessage: string | null;
   peerConnection: RTCPeerConnection | null;
   dataChannel: RTCDataChannel | null;
+  auth: AuthState;
 }
 
 const initialState: AppState = {
@@ -43,6 +54,14 @@ const initialState: AppState = {
   promptMessage: null,
   peerConnection: null,
   dataChannel: null,
+  auth: {
+    status: 'unauthenticated',
+    hostId: '',
+    sessionId: null,
+    totpSecret: null,
+    jwt: null,
+    error: null,
+  },
 };
 
 const App: React.FC = () => {
@@ -96,7 +115,7 @@ const App: React.FC = () => {
   }, []);
 
   // WebRTC Connection Management
-  useEffect(() => {
+  const initWebRTCConnection = () => {
     const SIGNALING_SERVER_URL = 'http://localhost:8080';
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
@@ -119,7 +138,7 @@ const App: React.FC = () => {
             hostId: 'vibe-coder-host',
             candidate: event.candidate.toJSON(),
           };
-          fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+          fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(signalMessage),
@@ -142,8 +161,38 @@ const App: React.FC = () => {
 
         dc.onmessage = (event) => {
           console.log('Data channel message:', event.data);
-          if (xtermRef.current) {
-            xtermRef.current.write(event.data);
+          try {
+            const message = JSON.parse(event.data);
+            
+            if (xtermRef.current) {
+              switch (message.type) {
+                case 'output':
+                  xtermRef.current.write(message.data);
+                  break;
+                case 'error':
+                  xtermRef.current.write(`\r\nError: ${message.error}\r\n`);
+                  break;
+                case 'completed':
+                  xtermRef.current.write('\r\nuser@localhost:~/project$ ');
+                  setState(prev => ({ ...prev, executionStatus: 'idle' }));
+                  break;
+                case 'prompt':
+                  setState(prev => ({ 
+                    ...prev, 
+                    executionStatus: 'awaitingInput',
+                    promptMessage: message.message 
+                  }));
+                  break;
+                default:
+                  // Fallback for plain text messages
+                  xtermRef.current.write(event.data);
+              }
+            }
+          } catch (e) {
+            // Handle plain text messages
+            if (xtermRef.current) {
+              xtermRef.current.write(event.data);
+            }
           }
         };
 
@@ -191,7 +240,7 @@ const App: React.FC = () => {
           hostId: 'vibe-coder-host',
         };
         
-        const sessionResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+        const sessionResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(createSessionMessage),
@@ -215,7 +264,7 @@ const App: React.FC = () => {
           offer: { type: offer?.type as "offer", sdp: offer?.sdp || '' },
         };
 
-        const signalResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+        const signalResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(signalMessage),
@@ -238,7 +287,7 @@ const App: React.FC = () => {
             hostId: 'vibe-coder-host',
           };
           
-          const answerResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+          const answerResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(getAnswerMessage),
@@ -266,7 +315,7 @@ const App: React.FC = () => {
           };
           
           try {
-            const candidatesResponse = await fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
+            const candidatesResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(getCandidatesMessage),
@@ -314,7 +363,15 @@ const App: React.FC = () => {
         dc.close();
       }
     };
-  }, []);
+  };
+
+  // Auto-initialize WebRTC connection after authentication
+  useEffect(() => {
+    if (state.auth.status === 'authenticated' && !state.peerConnection) {
+      console.log('Authentication successful, initializing WebRTC connection...');
+      initWebRTCConnection();
+    }
+  }, [state.auth.status]);
 
   // Check voice recognition support
   useEffect(() => {
@@ -344,19 +401,65 @@ const App: React.FC = () => {
   }, []);
 
   const executeCommand = async (command: string) => {
-    if (xtermRef.current) {
-      xtermRef.current.write(`user@localhost:~/project$ ${command}\r\n`);
+    if (!state.auth.jwt) {
+      if (xtermRef.current) {
+        xtermRef.current.write('\r\nError: Not authenticated. Please login first.\r\n');
+      }
+      return;
     }
+
+    if (xtermRef.current) {
+      xtermRef.current.write(`user@localhost:~/project$ claude-code "${command}"\r\n`);
+      xtermRef.current.write('🤖 Executing command...\r\n');
+    }
+    
     setState(prev => ({
       ...prev,
       executionStatus: 'running',
     }));
 
-    if (state.dataChannel && state.dataChannel.readyState === 'open') {
-      state.dataChannel.send(JSON.stringify({ type: 'command', command }));
-    } else {
+    try {
+      // Execute command via REST API (fallback) or WebRTC (if available)
+      if (state.dataChannel && state.dataChannel.readyState === 'open') {
+        // Use WebRTC data channel for real-time communication
+        state.dataChannel.send(JSON.stringify({ 
+          type: 'claude-command', 
+          command,
+          timestamp: Date.now()
+        }));
+      } else {
+        // Use REST API as fallback
+        const response = await fetch('http://localhost:8080/api/claude/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${state.auth.jwt}`
+          },
+          body: JSON.stringify({ command })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        if (xtermRef.current) {
+          if (result.output) {
+            xtermRef.current.write(result.output + '\r\n');
+          }
+          if (result.error) {
+            xtermRef.current.write(`Error: ${result.error}\r\n`);
+          }
+          xtermRef.current.write('user@localhost:~/project$ ');
+        }
+
+        setState(prev => ({ ...prev, executionStatus: 'idle' }));
+      }
+    } catch (error) {
       if (xtermRef.current) {
-        xtermRef.current.write('\r\nWebRTC Data Channel is not open.\r\n');
+        xtermRef.current.write(`\r\nError: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
+        xtermRef.current.write('user@localhost:~/project$ ');
       }
       setState(prev => ({ ...prev, executionStatus: 'idle' }));
     }
@@ -377,6 +480,98 @@ const App: React.FC = () => {
     }
   };
   
+  // Authentication functions
+  const handleHostIdSubmit = async () => {
+    if (!state.auth.hostId.trim() || state.auth.hostId.length !== 8) {
+      setState(prev => ({ 
+        ...prev, 
+        auth: { ...prev.auth, error: '8桁のHost IDを入力してください' }
+      }));
+      return;
+    }
+
+    try {
+      setState(prev => ({ 
+        ...prev, 
+        auth: { ...prev.auth, error: null }
+      }));
+      
+      // Create session with host server
+      const response = await fetch('http://localhost:8080/api/auth/sessions', {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('セッションの作成に失敗しました');
+      }
+      
+      const data = await response.json();
+      
+      setState(prev => ({ 
+        ...prev, 
+        auth: { 
+          ...prev.auth, 
+          status: 'entering_totp',
+          sessionId: data.sessionId,
+          totpSecret: data.totpSecret,
+        }
+      }));
+
+    } catch (error) {
+      setState(prev => ({ 
+        ...prev, 
+        auth: { ...prev.auth, error: error instanceof Error ? error.message : '接続エラー' }
+      }));
+    }
+  };
+
+  const handleTotpSubmit = async (totpCode: string) => {
+    if (!state.auth.sessionId) return;
+
+    try {
+      setState(prev => ({ 
+        ...prev, 
+        auth: { ...prev.auth, error: null }
+      }));
+
+      const response = await fetch(`http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totpCode }),
+      });
+
+      if (!response.ok) {
+        throw new Error('認証に失敗しました');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setState(prev => ({ 
+          ...prev, 
+          auth: { 
+            ...prev.auth, 
+            status: 'authenticated',
+            jwt: data.token,
+          }
+        }));
+        
+        // Start WebRTC connection after successful authentication
+        setTimeout(() => {
+          initWebRTCConnection();
+        }, 1000);
+      } else {
+        throw new Error(data.message || '認証に失敗しました');
+      }
+
+    } catch (error) {
+      setState(prev => ({ 
+        ...prev, 
+        auth: { ...prev.auth, error: error instanceof Error ? error.message : '認証エラー' }
+      }));
+    }
+  };
+
   const handleTextSubmit = () => {
     if (state.textInput.trim()) {
       if (state.executionStatus === 'awaitingInput') {
@@ -400,6 +595,125 @@ const App: React.FC = () => {
   const currentCommands = DEFAULT_PLAYLIST.commands;
   const visibleCommands = currentCommands.slice(state.currentCommandIndex, state.currentCommandIndex + 5);
   const isExecuting = state.executionStatus === 'running' || state.executionStatus === 'awaitingInput';
+  
+  // Render authentication screens
+  const renderAuthScreen = () => {
+    if (state.auth.status === 'entering_host_id') {
+      return (
+        <div className="flex-1 p-6 flex flex-col items-center justify-center">
+          <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold mb-2">ホスト接続</h2>
+              <p className="text-sm opacity-80">8桁のHost IDを入力してください</p>
+            </div>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={state.auth.hostId}
+                onChange={(e) => setState(prev => ({ 
+                  ...prev, 
+                  auth: { ...prev.auth, hostId: e.target.value.replace(/\D/g, '').slice(0, 8) }
+                }))}
+                onKeyDown={(e) => e.key === 'Enter' && handleHostIdSubmit()}
+                className="w-full p-4 bg-white/10 rounded-lg text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="12345678"
+                maxLength={8}
+                autoFocus
+              />
+              
+              {state.auth.error && (
+                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+              )}
+              
+              <button
+                onClick={handleHostIdSubmit}
+                disabled={state.auth.hostId.length !== 8}
+                className="w-full p-4 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                接続
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (state.auth.status === 'entering_totp') {
+      return (
+        <div className="flex-1 p-6 flex flex-col items-center justify-center">
+          <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold mb-2">2FA認証</h2>
+              <p className="text-sm opacity-80 mb-4">TOTP秘密鍵をAuthenticatorアプリに登録してください</p>
+              
+              {state.auth.totpSecret && (
+                <div className="bg-white/5 rounded-lg p-3 mb-4">
+                  <p className="text-xs opacity-60 mb-2">TOTP秘密鍵:</p>
+                  <p className="font-mono text-sm break-all select-all">{state.auth.totpSecret}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                onChange={(e) => {
+                  const code = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  if (code.length === 6) {
+                    handleTotpSubmit(code);
+                  }
+                }}
+                className="w-full p-4 bg-white/10 rounded-lg text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="123456"
+                maxLength={6}
+                autoFocus
+              />
+              
+              {state.auth.error && (
+                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+              )}
+              
+              <button
+                onClick={() => setState(prev => ({ 
+                  ...prev, 
+                  auth: { ...prev.auth, status: 'entering_host_id', error: null }
+                }))}
+                className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
+              >
+                戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: show host ID entry button
+    return (
+      <div className="flex-1 p-6 flex flex-col items-center justify-center">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold mb-4">Vibe Coder</h2>
+          <p className="text-lg opacity-80 mb-2">スマホでClaude Codeを実行</p>
+          <p className="text-sm opacity-60">まずはホストサーバーに接続してください</p>
+        </div>
+        
+        <button
+          onClick={() => setState(prev => ({ 
+            ...prev, 
+            auth: { ...prev.auth, status: 'entering_host_id' }
+          }))}
+          className="glass-morphism rounded-xl p-6 hover:bg-white/20 transition-all touch-friendly"
+        >
+          <div className="text-center">
+            <div className="text-4xl mb-3">🔗</div>
+            <div className="text-lg font-medium">ホストに接続</div>
+            <div className="text-sm opacity-80">8桁のHost IDで接続</div>
+          </div>
+        </button>
+      </div>
+    );
+  };
   
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 to-slate-700 text-white flex flex-col relative overflow-hidden mobile-optimized full-height-mobile">
@@ -441,8 +755,13 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Terminal Section */}
-      <div className="relative z-10 p-3 flex flex-col min-h-0 flex-1">
+      {/* Show authentication screens or main terminal interface */}
+      {state.auth.status !== 'authenticated' ? (
+        renderAuthScreen()
+      ) : (
+        <>
+          {/* Terminal Section */}
+          <div className="relative z-10 p-3 flex flex-col min-h-0 flex-1">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium flex items-center">
             Terminal
@@ -559,6 +878,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
 
       {/* Settings Modal */}
       {state.showSettings && (

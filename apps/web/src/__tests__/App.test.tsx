@@ -9,20 +9,26 @@ describe('App Component', () => {
     vi.clearAllMocks();
   });
 
-  it('should render the main interface', () => {
+  it('should render the initial authentication screen', () => {
     render(<App />);
     
-    expect(screen.getByText('Vibe Coder')).toBeInTheDocument();
+    // Header should be present
+    expect(screen.getByRole('heading', { level: 1, name: 'Vibe Coder' })).toBeInTheDocument();
     expect(screen.getByText('Claude Code Mobile')).toBeInTheDocument();
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    
+    // Main welcome screen should be shown
+    expect(screen.getByRole('heading', { level: 2, name: 'Vibe Coder' })).toBeInTheDocument();
+    expect(screen.getByText('スマホでClaude Codeを実行')).toBeInTheDocument();
+    expect(screen.getByText('ホストに接続')).toBeInTheDocument();
   });
 
-  it('should show terminal container', () => {
+  it('should not show terminal when unauthenticated', () => {
     render(<App />);
     
-    // xterm.js terminal is rendered in a container, text is not directly in DOM
+    // Terminal should not be visible when not authenticated
     const terminalContainer = document.querySelector('.terminal-output');
-    expect(terminalContainer).toBeInTheDocument();
+    expect(terminalContainer).not.toBeInTheDocument();
+    expect(screen.queryByText('Terminal')).not.toBeInTheDocument();
   });
 
   it('should display connection status', () => {
@@ -33,25 +39,25 @@ describe('App Component', () => {
     expect(wifiOffIcon).toBeInTheDocument();
   });
 
-  it('should show command slots', () => {
+  it('should not show command slots when unauthenticated', () => {
     render(<App />);
     
-    // Check that the first few commands are visible (only 5 slots shown at once)
-    expect(screen.getByText('Login')).toBeInTheDocument();
-    expect(screen.getByText('Fix Bug')).toBeInTheDocument();
-    expect(screen.getByText('Mobile')).toBeInTheDocument();
-    expect(screen.getByText('Test')).toBeInTheDocument();
-    expect(screen.getByText('Style')).toBeInTheDocument();
+    // Command slots should not be visible when not authenticated
+    expect(screen.queryByText('Login')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fix Bug')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mobile')).not.toBeInTheDocument();
+    expect(screen.queryByText('Test')).not.toBeInTheDocument();
+    expect(screen.queryByText('Style')).not.toBeInTheDocument();
   });
 
-  it('should execute command when clicking command button', () => {
+  it('should show host connection button', () => {
     render(<App />);
     
-    const loginButton = screen.getByText('Login');
-    fireEvent.click(loginButton);
+    const connectButton = screen.getByRole('button', { name: /ホストに接続/i });
+    expect(connectButton).toBeInTheDocument();
     
-    // Command button exists and can be clicked without error
-    expect(loginButton).toBeInTheDocument();
+    // Click should work without error
+    fireEvent.click(connectButton);
   });
 
 
@@ -78,13 +84,13 @@ describe('App Component', () => {
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 
-  it('should render terminal area', () => {
+  it('should not render terminal area when unauthenticated', () => {
     render(<App />);
     
-    // Check that terminal-related elements exist
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    // Terminal should not be visible when not authenticated
+    expect(screen.queryByText('Terminal')).not.toBeInTheDocument();
     const terminalContainer = document.querySelector('.terminal-output');
-    expect(terminalContainer).toBeInTheDocument();
+    expect(terminalContainer).not.toBeInTheDocument();
   });
 
   it('should render command navigation', () => {
@@ -134,7 +140,34 @@ describe('App Component', () => {
     render(<App />);
     
     // Should still render all essential elements
-    expect(screen.getByText('Vibe Coder')).toBeInTheDocument();
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Vibe Coder' })).toBeInTheDocument();
+    expect(screen.getByText('ホストに接続')).toBeInTheDocument();
+  });
+
+  it('should show host ID input screen when connect button is clicked', () => {
+    render(<App />);
+    
+    const connectButton = screen.getByRole('button', { name: /ホストに接続/i });
+    fireEvent.click(connectButton);
+    
+    // Should show host ID input screen
+    expect(screen.getByText('ホスト接続')).toBeInTheDocument();
+    expect(screen.getByText('8桁のHost IDを入力してください')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('12345678')).toBeInTheDocument();
+  });
+
+  it('should validate host ID input', () => {
+    render(<App />);
+    
+    // Navigate to host ID input screen
+    const connectButton = screen.getByRole('button', { name: /ホストに接続/i });
+    fireEvent.click(connectButton);
+    
+    // Try to submit with invalid input
+    const submitButton = screen.getByRole('button', { name: '接続' });
+    fireEvent.click(submitButton);
+    
+    // Should show error message
+    expect(screen.getByText('8桁のHost IDを入力してください')).toBeInTheDocument();
   });
 });

@@ -30,7 +30,7 @@ class VibeCoderHost {
     this.server = createServer(this.app);
     this.sessionManager = new SessionManager();
     this.claudeService = new ClaudeService();
-    this.webrtcService = new WebRTCService(this.sessionManager);
+    this.webrtcService = new WebRTCService(this.sessionManager, this.claudeService);
     
     this.setupMiddleware();
     this.setupRoutes();

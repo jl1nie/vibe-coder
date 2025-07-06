@@ -3,6 +3,7 @@ import { SignalMessage, SignalResponse } from '@vibe-coder/shared';
 import logger from '../utils/logger';
 import { hostConfig } from '../utils/config';
 import { SessionManager } from './session-manager';
+import { ClaudeService } from './claude-service';
 
 export interface WebRTCConnection {
   id: string;
@@ -17,10 +18,12 @@ export class WebRTCService {
   private connections = new Map<string, WebRTCConnection>();
   private signalingUrl: string;
   private sessionManager: SessionManager;
+  private claudeService: ClaudeService;
 
-  constructor(sessionManager: SessionManager) {
+  constructor(sessionManager: SessionManager, claudeService: ClaudeService) {
     this.signalingUrl = hostConfig.signalingUrl;
     this.sessionManager = sessionManager;
+    this.claudeService = claudeService;
   }
 
   /**
@@ -31,9 +34,9 @@ export class WebRTCService {
     
     logger.info('Creating WebRTC connection', { sessionId, connectionId });
 
-    // Simple Peer インスタンスを作成（ホスト側はinitiator: true）
+    // Simple Peer インスタンスを作成（ホスト側はinitiator: false - クライアントがofferを送る）
     const peer = new SimplePeer({
-      initiator: true,
+      initiator: false,
       trickle: true,
       config: {
         iceServers: [
@@ -66,26 +69,12 @@ export class WebRTCService {
     const { peer, sessionId, id } = connection;
 
     peer.on('signal', async (data: any) => {
-      logger.info('WebRTC signal generated', { sessionId, connectionId: id });
+      logger.info('WebRTC signal generated (answer)', { sessionId, connectionId: id, signalType: data.type });
       
-      try {
-        // シグナリングサーバーにofferを送信
-        await this.sendToSignalingServer({
-          type: 'offer',
-          sessionId,
-          hostId: this.sessionManager.getHostId(),
-          offer: {
-            type: 'offer',
-            sessionId,
-            sdp: JSON.stringify(data),
-            timestamp: Date.now()
-          }
-        });
-      } catch (error) {
-        logger.error('Failed to send signal to signaling server', {
-          sessionId,
-          error: (error as Error).message
-        });
+      // ホスト側から生成されるアンサーやICE candidateをログ出力
+      // 実際のシグナリングは /signal エンドポイントで処理される
+      if (data.type === 'answer') {
+        logger.info('WebRTC answer generated for client', { sessionId, connectionId: id });
       }
     });
 
@@ -130,7 +119,7 @@ export class WebRTCService {
   /**
    * データチャネルメッセージのハンドリング
    */
-  private handleDataChannelMessage(connection: WebRTCConnection, message: any): void {
+  private async handleDataChannelMessage(connection: WebRTCConnection, message: any): Promise<void> {
     const { sessionId, id } = connection;
     
     switch (message.type) {
@@ -139,12 +128,64 @@ export class WebRTCService {
         break;
         
       case 'claude-command':
-        // Claude Codeコマンドの実行は別のサービスが担当
-        // ここではメッセージを中継するだけ
         logger.info('Claude command received via WebRTC', {
           sessionId,
           connectionId: id,
           command: message.command
+        });
+        
+        try {
+          // Claude Codeコマンドを実行
+          const result = await this.claudeService.executeCommand(message.command);
+          
+          // 結果をリアルタイムでストリーミング
+          if (result.output) {
+            this.sendToPeer(connection, {
+              type: 'output',
+              data: result.output
+            });
+          }
+          
+          if (result.error) {
+            this.sendToPeer(connection, {
+              type: 'error',
+              error: result.error
+            });
+          }
+          
+          // コマンド実行完了通知
+          this.sendToPeer(connection, {
+            type: 'completed',
+            timestamp: Date.now()
+          });
+          
+        } catch (error) {
+          logger.error('Failed to execute Claude command via WebRTC', {
+            sessionId,
+            connectionId: id,
+            command: message.command,
+            error: (error as Error).message
+          });
+          
+          this.sendToPeer(connection, {
+            type: 'error',
+            error: `Command execution failed: ${(error as Error).message}`
+          });
+        }
+        break;
+        
+      case 'response':
+        // ユーザーからの応答（プロンプト対応用）
+        logger.info('User response received via WebRTC', {
+          sessionId,
+          connectionId: id,
+          response: message.response
+        });
+        
+        // TODO: プロンプト対応機能の実装
+        this.sendToPeer(connection, {
+          type: 'output',
+          data: `Received response: ${message.response}\r\n`
         });
         break;
         
@@ -225,24 +266,6 @@ export class WebRTCService {
     }
   }
 
-  /**
-   * シグナリングサーバーにメッセージを送信
-   */
-  private async sendToSignalingServer(message: SignalMessage): Promise<SignalResponse> {
-    const response = await fetch(this.signalingUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Signaling server error: ${response.status}`);
-    }
-
-    return response.json();
-  }
 
   /**
    * セッションIDで接続を検索

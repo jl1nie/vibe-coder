@@ -241,5 +241,153 @@ export function createWebRTCRouter(
     }
   });
 
+  /**
+   * WebRTC シグナリング統合エンドポイント（PWAクライアント用）
+   */
+  router.post('/signal', async (req, res) => {
+    try {
+      const { type, sessionId, hostId, offer, candidate } = req.body;
+      
+      logger.info('WebRTC signaling request', { type, sessionId, hostId });
+      
+      switch (type) {
+        case 'create-session':
+          // WebRTCセッション作成
+          try {
+            const connection = await webrtcService.createConnection(sessionId);
+            logger.info('WebRTC session created', { sessionId, connectionId: connection.id });
+            
+            res.json({
+              success: true,
+              message: 'WebRTC session created',
+              sessionId: sessionId,
+              connectionId: connection.id
+            });
+          } catch (error) {
+            logger.error('Failed to create WebRTC session', {
+              sessionId,
+              error: (error as Error).message
+            });
+            
+            res.status(500).json({
+              success: false,
+              error: 'Failed to create WebRTC session'
+            });
+          }
+          break;
+          
+        case 'offer':
+          // オファー受信 - ホスト側でアンサーを生成
+          if (!offer) {
+            return res.status(400).json({
+              success: false,
+              error: 'Offer is required'
+            });
+          }
+          
+          try {
+            const connection = webrtcService.getConnectionBySessionId(sessionId);
+            if (!connection) {
+              return res.status(404).json({
+                success: false,
+                error: 'WebRTC session not found'
+              });
+            }
+            
+            // Simple-peerでのsignal処理（PWAからのofferを受信）
+            connection.peer.signal(offer);
+            
+            res.json({
+              success: true,
+              message: 'Offer received and processed',
+              sessionId: sessionId
+            });
+          } catch (error) {
+            logger.error('Failed to process offer', {
+              sessionId,
+              error: (error as Error).message
+            });
+            
+            res.status(500).json({
+              success: false,
+              error: 'Failed to process offer'
+            });
+          }
+          break;
+          
+        case 'get-answer':
+          // アンサー取得 - 現在の実装では未対応（Simple-peerが自動的に処理）
+          res.json({
+            success: true,
+            answer: null,
+            message: 'Answer handling via Simple-peer signaling'
+          });
+          break;
+          
+        case 'candidate':
+          // ICE候補受信
+          if (!candidate) {
+            return res.status(400).json({
+              success: false,
+              error: 'Candidate is required'
+            });
+          }
+          
+          try {
+            const connection = webrtcService.getConnectionBySessionId(sessionId);
+            if (!connection) {
+              return res.status(404).json({
+                success: false,
+                error: 'WebRTC session not found'
+              });
+            }
+            
+            // ICE candidateをSimple-peerに送信
+            connection.peer.signal(candidate);
+            
+            res.json({
+              success: true,
+              message: 'ICE candidate received and processed'
+            });
+          } catch (error) {
+            logger.error('Failed to process ICE candidate', {
+              sessionId,
+              error: (error as Error).message
+            });
+            
+            res.status(500).json({
+              success: false,
+              error: 'Failed to process ICE candidate'
+            });
+          }
+          break;
+          
+        case 'get-candidate':
+          // ICE候補取得 - Simple-peerが自動的に処理するため未対応
+          res.json({
+            success: true,
+            candidates: [],
+            message: 'ICE candidates handled via Simple-peer signaling'
+          });
+          break;
+          
+        default:
+          return res.status(400).json({
+            success: false,
+            error: 'Unknown signal type'
+          });
+      }
+    } catch (error) {
+      logger.error('WebRTC signaling error', {
+        error: (error as Error).message
+      });
+      
+      res.status(500).json({
+        success: false,
+        error: 'WebRTC signaling failed'
+      });
+    }
+  });
+
   return router;
 }
