@@ -1,9 +1,26 @@
 import { config } from 'dotenv';
 import { z } from 'zod';
 import { HostConfig } from '../types';
+import path from 'path';
 
-// Load environment variables
-config();
+// Load environment variables from project root  
+// Try multiple possible .env locations
+const possibleEnvPaths = [
+  path.resolve(process.cwd(), '../../.env'), // from host package
+  path.resolve(__dirname, '../../../../.env'), // from compiled dist
+  path.resolve(process.cwd(), '.env'), // from current directory
+];
+
+for (const envPath of possibleEnvPaths) {
+  try {
+    require('fs').accessSync(envPath);
+    config({ path: envPath });
+    console.log(`Using .env file: ${envPath}`);
+    break;
+  } catch (e) {
+    // Continue to next path
+  }
+}
 
 const ConfigSchema = z.object({
   PORT: z.string().default('8080'),

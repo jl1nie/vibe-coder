@@ -10,31 +10,33 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Change ownership of the app directory
+# Install pnpm and Claude Code as root first
+RUN npm install -g pnpm@latest
+RUN npm install -g @anthropic-ai/claude-code
+
+# Copy package files (as root)
+COPY package.json pnpm-lock.yaml turbo.json pnpm-workspace.yaml tsconfig.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/host/package.json ./packages/host/
+
+# Install dependencies (as root)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code (as root)
+COPY packages/shared ./packages/shared
+COPY packages/host ./packages/host
+
+# Build shared package first (as root)
+RUN cd packages/shared && pnpm build
+
+# Build host package (as root)
+RUN cd packages/host && pnpm build
+
+# Change ownership of everything to nodejs user
 RUN chown -R nodejs:nodejs /app
 
 # Switch to the non-root user
 USER nodejs
-
-# Install pnpm and Claude Code
-RUN npm install -g pnpm@latest
-RUN npm install -g @anthropic-ai/claude-code
-
-
-# Copy package files
-COPY package.json pnpm-lock.yaml turbo.json ./
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/host/package.json ./packages/host/
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Copy source code
-COPY packages/shared ./packages/shared
-COPY packages/host ./packages/host
-
-# Build both packages using turbo
-RUN pnpm build --filter @vibe-coder/host
 
 # Production stage
 FROM node:20-alpine AS production

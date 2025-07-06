@@ -27,6 +27,7 @@ class VibeCoderHost {
 
   constructor() {
     this.app = express();
+    this.server = createServer(this.app);
     this.sessionManager = new SessionManager();
     this.claudeService = new ClaudeService();
     this.webrtcService = new WebRTCService(this.sessionManager);
@@ -100,7 +101,6 @@ class VibeCoderHost {
   }
 
   private setupWebSocket(): void {
-    this.server = createServer(this.app);
     this.wss = new WebSocketServer({ server: this.server });
 
     this.wss.on('connection', (ws, req) => {
@@ -160,15 +160,28 @@ class VibeCoderHost {
   }
 
   public async start(): Promise<void> {
-    return new Promise((resolve) => {
-      this.server.listen(hostConfig.port, () => {
-        logger.info('Vibe Coder Host started', {
-          port: hostConfig.port,
-          hostId: this.sessionManager.getHostId(),
-          environment: process.env.NODE_ENV || 'development',
-        });
-        
-        console.log(`
+    return new Promise((resolve, reject) => {
+      this.server.on('error', (error: any) => {
+        logger.error('Server error', { error: error.message, code: error.code, stack: error.stack });
+        reject(error);
+      });
+
+      this.server.on('listening', () => {
+        const addr = this.server.address();
+        logger.info('Server actually listening', { address: addr });
+      });
+
+      try {
+        this.server.listen(hostConfig.port, '0.0.0.0', () => {
+          const addr = this.server.address();
+          logger.info('Vibe Coder Host started', {
+            port: hostConfig.port,
+            actualAddress: addr,
+            hostId: this.sessionManager.getHostId(),
+            environment: process.env.NODE_ENV || 'development',
+          });
+          
+          console.log(`
 ╭─────────────────────────────────────────────────────────────╮
 │                                                             │
 │  🎯 Vibe Coder Host Server                                  │
@@ -180,10 +193,14 @@ class VibeCoderHost {
 │  🔗 Connect from: https://vibe-coder.space                  │
 │                                                             │
 ╰─────────────────────────────────────────────────────────────╯
-        `);
-        
-        resolve();
-      });
+          `);
+          
+          resolve();
+        });
+      } catch (error) {
+        logger.error('Server listen failed', { error: (error as Error).message });
+        reject(error);
+      }
     });
   }
 
