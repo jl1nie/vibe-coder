@@ -167,7 +167,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 ### C. 開発環境・ツール
 
 **必要な開発ツール:**
-- Node.js + npm/yarn
+- Node.js + pnpm
 - Docker + Docker Compose
 - Chrome ブラウザ（DevTools使用）
 - VS Code（推奨エディタ）
@@ -323,7 +323,7 @@ services:
       - /app/node_modules  # ホストのnode_modulesと分離
     environment:
       - NODE_ENV=test
-    command: npm test
+    command: ppnpm test
 ```
 
 ***3. pre-commit フック（強制実行）***
@@ -332,7 +332,7 @@ services:
 {
   "husky": {
     "hooks": {
-      "pre-commit": "npm run lint && npm run type-check && npm run test:verify && npm test"
+      "pre-commit": "ppnpm run lint && ppnpm run type-check && ppnpm test"
     }
   },
   "scripts": {
@@ -341,8 +341,7 @@ services:
     "type-check": "tsc --noEmit",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "test:verify": "npm ls --depth=0",
-    "test:clean": "rm -rf node_modules && npm ci",
+    "test:clean": "rm -rf node_modules && pnpm i",
     "test:docker": "docker-compose -f docker-compose.dev.yml run test-runner"
   }
 }
@@ -366,12 +365,12 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run type-check
-      - run: npm run format:check
-      - run: npm test -- --coverage --watchAll=false
-      - run: npm run test:docker
+      - run: pnpm install
+      - run: ppnpm run lint
+      - run: ppnpm run type-check
+      - run: ppnpm run format:check
+      - run: ppnpm test -- --coverage --watchAll=false
+      - run: pnpm run test:docker
 ```
 
 ***5. テストヘルスチェック（定期実行）***
@@ -389,16 +388,16 @@ node --version | grep -q "18.19.0" || (echo "❌ Wrong Node.js version" && exit 
 npm ls --depth=0 > /dev/null || (echo "❌ Dependencies broken" && exit 1)
 
 # 型チェック
-npm run type-check || (echo "❌ TypeScript type check failed" && exit 1)
+pnpm run type-check || (echo "❌ TypeScript type check failed" && exit 1)
 
 # Lint チェック
-npm run lint || (echo "❌ ESLint check failed" && exit 1)
+pnpm run lint || (echo "❌ ESLint check failed" && exit 1)
 
 # フォーマットチェック
-npm run format:check || (echo "❌ Prettier format check failed" && exit 1)
+pnpm run format:check || (echo "❌ Prettier format check failed" && exit 1)
 
 # テスト実行確認
-timeout 30s npm test -- --passWithNoTests || (echo "❌ Test execution failed" && exit 1)
+ppnpm test -- --passWithNoTests || (echo "❌ Test execution failed" && exit 1)
 
 echo "✅ Test environment healthy"
 ```
@@ -409,11 +408,11 @@ echo "✅ Test environment healthy"
 #!/bin/bash
 echo "🌅 Daily development start..."
 git pull
-npm ci
-npm run test:verify
-npm run type-check
-npm run lint
-npm test -- --passWithNoTests
+pnpm ci
+pnpm run test:verify
+pnpm run type-check
+pnpm run lint
+pnpm test -- --passWithNoTests
 echo "✅ Ready to code!"
 ```
 
@@ -439,14 +438,19 @@ echo "✅ Ready to code!"
 - **マルチアーキテクチャ**: AMD64/ARM64対応
 - **プロダクション版からの自動化検討**
 
+
+
 **ユーザー向けセットアップ（超簡単）:**
 ```bash
-# インストール（1回のみ）
-npm install -g vibe-coder
+# 1. リポジトリをクローン
+git clone https://github.com/your-username/vibe-coder.git
+cd vibe-coder
 
-# 任意の開発ディレクトリで実行
-cd my-project
-vibe-coder
+# 2. 依存関係をインストール
+pnpm install
+
+# 3. Vibe Coder を起動
+./scripts/vibe-coder start
 # → 8桁キー表示、スマホから接続待機
 ```
 
