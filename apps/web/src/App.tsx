@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mic,
   Settings,
@@ -14,6 +14,60 @@ import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
 import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+
+// Web Speech API type declarations
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  readonly length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+declare const SpeechRecognition: {
+  prototype: SpeechRecognition;
+  new(): SpeechRecognition;
+};
 
 type ExecutionStatus = 'idle' | 'running' | 'awaitingInput' | 'cancelled' | 'completed';
 type AuthStatus = 'unauthenticated' | 'entering_host_id' | 'entering_totp' | 'authenticated';
@@ -39,6 +93,7 @@ interface AppState {
   peerConnection: RTCPeerConnection | null;
   dataChannel: RTCDataChannel | null;
   auth: AuthState;
+  voiceCommandPending: boolean;
 }
 
 const initialState: AppState = {
@@ -62,6 +117,7 @@ const initialState: AppState = {
     jwt: null,
     error: null,
   },
+  voiceCommandPending: false,
 };
 
 const App: React.FC = () => {
@@ -70,6 +126,7 @@ const App: React.FC = () => {
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const executionStateRef = useRef(state.executionStatus);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     executionStateRef.current = state.executionStatus;
@@ -371,36 +428,70 @@ const App: React.FC = () => {
       console.log('Authentication successful, initializing WebRTC connection...');
       initWebRTCConnection();
     }
-  }, [state.auth.status]);
+  }, [state.auth.status, state.peerConnection]);
 
-  // Check voice recognition support
+  // Check voice recognition support and initialize
   useEffect(() => {
-    const supported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+    const SpeechRecognitionAPI = window.webkitSpeechRecognition || window.SpeechRecognition;
+    const supported = !!SpeechRecognitionAPI;
+    
     setState(prev => ({ ...prev, voiceSupported: supported }));
-  }, []);
+    
+    if (supported) {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'ja-JP'; // Japanese primary, will fallback to browser default
+      recognition.maxAlternatives = 1;
 
-  // Handle ESC key for interruption
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && executionStateRef.current === 'running') {
+      recognition.onstart = () => {
+        console.log('Voice recognition started');
+        setState(prev => ({ ...prev, isRecording: true }));
         if (xtermRef.current) {
-          xtermRef.current.write('\r\nExecution cancelled by user.\r\n');
-          xtermRef.current.write('user@localhost:~/project$ ');
+          xtermRef.current.write('\r\n🎤 Listening...\r\n');
         }
-        setState(prev => ({
-          ...prev,
-          executionStatus: 'cancelled',
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Voice recognition result:', transcript);
+        
+        if (xtermRef.current) {
+          xtermRef.current.write(`🗣️ "${transcript}"\r\n`);
+        }
+        
+        // Execute the voice command automatically
+        setState(prev => ({ 
+          ...prev, 
+          textInput: transcript,
+          voiceCommandPending: true 
         }));
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Voice recognition error:', event.error);
+        setState(prev => ({ ...prev, isRecording: false }));
+        if (xtermRef.current) {
+          xtermRef.current.write(`\r\n❌ Voice error: ${event.error}\r\n`);
+        }
+      };
+
+      recognition.onend = () => {
+        console.log('Voice recognition ended');
+        setState(prev => ({ ...prev, isRecording: false }));
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
       }
     };
+  }, [state.auth.jwt]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  const executeCommand = async (command: string) => {
+  const executeCommand = useCallback(async (command: string) => {
     if (!state.auth.jwt) {
       if (xtermRef.current) {
         xtermRef.current.write('\r\nError: Not authenticated. Please login first.\r\n');
@@ -463,7 +554,7 @@ const App: React.FC = () => {
       }
       setState(prev => ({ ...prev, executionStatus: 'idle' }));
     }
-  };
+  }, [state.auth.jwt, state.dataChannel]);
 
   const handlePromptResponse = async (response: string) => {
     if (xtermRef.current) {
@@ -479,6 +570,39 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, executionStatus: 'idle' }));
     }
   };
+
+  // Handle voice command execution
+  useEffect(() => {
+    if (state.voiceCommandPending && state.textInput.trim()) {
+      executeCommand(state.textInput);
+      setState(prev => ({ 
+        ...prev, 
+        voiceCommandPending: false,
+        textInput: ''
+      }));
+    }
+  }, [state.voiceCommandPending, state.textInput, executeCommand]);
+
+  // Handle ESC key for interruption
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && executionStateRef.current === 'running') {
+        if (xtermRef.current) {
+          xtermRef.current.write('\r\nExecution cancelled by user.\r\n');
+          xtermRef.current.write('user@localhost:~/project$ ');
+        }
+        setState(prev => ({
+          ...prev,
+          executionStatus: 'cancelled',
+        }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
   
   // Authentication functions
   const handleHostIdSubmit = async () => {
@@ -580,6 +704,25 @@ const App: React.FC = () => {
         executeCommand(state.textInput);
       }
       setState(prev => ({ ...prev, textInput: '' }));
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    if (!state.voiceSupported || !recognitionRef.current) return;
+
+    if (state.isRecording) {
+      // Stop recording
+      recognitionRef.current.stop();
+    } else {
+      // Start recording
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Failed to start voice recognition:', error);
+        if (xtermRef.current) {
+          xtermRef.current.write(`\r\n❌ Voice recognition failed to start\r\n`);
+        }
+      }
     }
   };
   
@@ -737,9 +880,9 @@ const App: React.FC = () => {
           </div>
           
           <button 
-            onClick={() => setState(prev => ({ ...prev, isRecording: !prev.isRecording }))}
+            onClick={handleVoiceToggle}
             className={`touch-friendly rounded-full backdrop-blur-sm transition-all ${state.isRecording ? 'bg-red-500 pulse-recording' : 'glass-morphism hover:bg-white/20'} ${!state.voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={state.voiceSupported ? 'Voice input' : 'Voice input not supported'}
+            title={state.voiceSupported ? (state.isRecording ? 'Stop recording' : 'Start voice input') : 'Voice input not supported'}
             disabled={!state.voiceSupported}
           >
             <Mic className="w-4 h-4" />
@@ -902,7 +1045,7 @@ const App: React.FC = () => {
                 <span className="text-sm">{state.voiceSupported ? 'Available' : 'Not supported'}</span>
               </div>
               <p className="text-xs opacity-60 mt-1">
-                {state.voiceSupported ? 'Tap microphone button and speak your command' : 'Voice recognition is not supported in this browser'}
+                {state.voiceSupported ? 'Tap microphone button and speak commands in Japanese or English' : 'Voice recognition is not supported in this browser'}
               </p>
             </div>
 
