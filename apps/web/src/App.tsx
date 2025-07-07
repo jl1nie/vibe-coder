@@ -945,7 +945,6 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <input
                 type="text"
-                value=""
                 onChange={(e) => {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
                   if (code.length === 6) {
