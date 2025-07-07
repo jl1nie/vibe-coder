@@ -3,10 +3,6 @@ import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
 
 declare global {
-  interface Window {
-    webkitSpeechRecognition: any;
-    SpeechRecognition: any;
-  }
   var createMockTerminalOutput: (overrides?: object) => any;
   var createMockConnectionStatus: (overrides?: object) => any;
 }
@@ -19,25 +15,31 @@ afterEach(() => {
   cleanup();
 });
 
-// Mock Web Speech API
-Object.defineProperty(window as any, 'webkitSpeechRecognition', {
+// Mock Web Speech API constructor
+const MockSpeechRecognitionClass = vi.fn().mockImplementation(() => ({
+  start: vi.fn(),
+  stop: vi.fn(),
+  abort: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  continuous: false,
+  interimResults: false,
+  lang: 'ja-JP',
+  maxAlternatives: 1,
+  onstart: null,
+  onresult: null,
+  onerror: null,
+  onend: null,
+}));
+
+Object.defineProperty(window, 'webkitSpeechRecognition', {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    start: vi.fn(),
-    stop: vi.fn(),
-    abort: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    continuous: false,
-    interimResults: false,
-    lang: 'ja-JP',
-    maxAlternatives: 1,
-  })),
+  value: MockSpeechRecognitionClass,
 });
 
-Object.defineProperty(window as any, 'SpeechRecognition', {
+Object.defineProperty(window, 'SpeechRecognition', {
   writable: true,
-  value: window.webkitSpeechRecognition,
+  value: MockSpeechRecognitionClass,
 });
 
 // Mock ResizeObserver

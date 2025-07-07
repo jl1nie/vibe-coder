@@ -13,7 +13,7 @@ services:
       - "8080:8080"
     volumes:
       - ./workspace:/app/workspace
-      - ~/.claude:/app/.claude:ro
+      - ~/.claude:/app/.claude
     environment:
       - NODE_ENV=production
       - SIGNALING_SERVER_URL=${SIGNALING_SERVER_URL:-https://vibe-coder.space/api/signal}

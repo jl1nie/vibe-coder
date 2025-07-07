@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mic,
   Settings,
@@ -8,12 +8,68 @@ import {
   WifiOff,
   ArrowUp,
   ArrowDown,
-  CornerDownLeft
+  CornerDownLeft,
+  LogOut
 } from 'lucide-react';
 import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
 import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import QRCode from 'qrcode';
+
+// Web Speech API type declarations
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  readonly length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+declare const SpeechRecognition: {
+  prototype: SpeechRecognition;
+  new(): SpeechRecognition;
+};
 
 type ExecutionStatus = 'idle' | 'running' | 'awaitingInput' | 'cancelled' | 'completed';
 type AuthStatus = 'unauthenticated' | 'entering_host_id' | 'entering_totp' | 'authenticated';
@@ -23,8 +79,10 @@ interface AuthState {
   hostId: string;
   sessionId: string | null;
   totpSecret: string | null;
+  qrCodeUrl: string | null;
   jwt: string | null;
   error: string | null;
+  totpInput: string;
 }
 
 interface AppState {
@@ -39,6 +97,7 @@ interface AppState {
   peerConnection: RTCPeerConnection | null;
   dataChannel: RTCDataChannel | null;
   auth: AuthState;
+  voiceCommandPending: boolean;
 }
 
 const initialState: AppState = {
@@ -59,9 +118,12 @@ const initialState: AppState = {
     hostId: '',
     sessionId: null,
     totpSecret: null,
+    qrCodeUrl: null,
     jwt: null,
     error: null,
+    totpInput: '',
   },
+  voiceCommandPending: false,
 };
 
 const App: React.FC = () => {
@@ -70,6 +132,7 @@ const App: React.FC = () => {
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const executionStateRef = useRef(state.executionStatus);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
     executionStateRef.current = state.executionStatus;
@@ -206,9 +269,13 @@ const App: React.FC = () => {
         dc.onclose = () => {
           console.log('Data channel closed');
           if (xtermRef.current) {
-            xtermRef.current.write('\r\nWebRTC Data Channel disconnected.\r\n');
+            xtermRef.current.write('\r\n⚠️ WebRTC Data Channel disconnected. Connection lost.\r\n');
           }
-          setState(prev => ({ ...prev, dataChannel: null }));
+          setState(prev => ({ 
+            ...prev, 
+            dataChannel: null,
+            connectionStatus: { isConnected: false }
+          }));
         };
 
         dc.onerror = (error) => {
@@ -371,36 +438,70 @@ const App: React.FC = () => {
       console.log('Authentication successful, initializing WebRTC connection...');
       initWebRTCConnection();
     }
-  }, [state.auth.status]);
+  }, [state.auth.status, state.peerConnection]);
 
-  // Check voice recognition support
+  // Check voice recognition support and initialize
   useEffect(() => {
-    const supported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+    const SpeechRecognitionAPI = window.webkitSpeechRecognition || window.SpeechRecognition;
+    const supported = !!SpeechRecognitionAPI;
+    
     setState(prev => ({ ...prev, voiceSupported: supported }));
-  }, []);
+    
+    if (supported) {
+      const recognition = new SpeechRecognitionAPI();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'ja-JP'; // Japanese primary, will fallback to browser default
+      recognition.maxAlternatives = 1;
 
-  // Handle ESC key for interruption
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && executionStateRef.current === 'running') {
+      recognition.onstart = () => {
+        console.log('Voice recognition started');
+        setState(prev => ({ ...prev, isRecording: true }));
         if (xtermRef.current) {
-          xtermRef.current.write('\r\nExecution cancelled by user.\r\n');
-          xtermRef.current.write('user@localhost:~/project$ ');
+          xtermRef.current.write('\r\n🎤 Listening...\r\n');
         }
-        setState(prev => ({
-          ...prev,
-          executionStatus: 'cancelled',
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Voice recognition result:', transcript);
+        
+        if (xtermRef.current) {
+          xtermRef.current.write(`🗣️ "${transcript}"\r\n`);
+        }
+        
+        // Execute the voice command automatically
+        setState(prev => ({ 
+          ...prev, 
+          textInput: transcript,
+          voiceCommandPending: true 
         }));
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Voice recognition error:', event.error);
+        setState(prev => ({ ...prev, isRecording: false }));
+        if (xtermRef.current) {
+          xtermRef.current.write(`\r\n❌ Voice error: ${event.error}\r\n`);
+        }
+      };
+
+      recognition.onend = () => {
+        console.log('Voice recognition ended');
+        setState(prev => ({ ...prev, isRecording: false }));
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
       }
     };
+  }, [state.auth.jwt]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  const executeCommand = async (command: string) => {
+  const executeCommand = useCallback(async (command: string) => {
     if (!state.auth.jwt) {
       if (xtermRef.current) {
         xtermRef.current.write('\r\nError: Not authenticated. Please login first.\r\n');
@@ -439,6 +540,27 @@ const App: React.FC = () => {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            // Session expired - redirect to 2FA
+            setState(prev => ({
+              ...prev,
+              auth: {
+                ...prev.auth,
+                status: 'entering_totp',
+                jwt: null,
+                error: 'セッションが期限切れです。再度認証してください。',
+                totpInput: '', // Clear TOTP input
+              },
+              connectionStatus: { isConnected: false },
+              peerConnection: null,
+              dataChannel: null,
+              executionStatus: 'idle',
+            }));
+            if (xtermRef.current) {
+              xtermRef.current.write('\r\n⚠️ Session expired. Please re-authenticate.\r\n');
+            }
+            return;
+          }
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
@@ -463,7 +585,7 @@ const App: React.FC = () => {
       }
       setState(prev => ({ ...prev, executionStatus: 'idle' }));
     }
-  };
+  }, [state.auth.jwt, state.dataChannel]);
 
   const handlePromptResponse = async (response: string) => {
     if (xtermRef.current) {
@@ -479,6 +601,39 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, executionStatus: 'idle' }));
     }
   };
+
+  // Handle voice command execution
+  useEffect(() => {
+    if (state.voiceCommandPending && state.textInput.trim()) {
+      executeCommand(state.textInput);
+      setState(prev => ({ 
+        ...prev, 
+        voiceCommandPending: false,
+        textInput: ''
+      }));
+    }
+  }, [state.voiceCommandPending, state.textInput, executeCommand]);
+
+  // Handle ESC key for interruption
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && executionStateRef.current === 'running') {
+        if (xtermRef.current) {
+          xtermRef.current.write('\r\nExecution cancelled by user.\r\n');
+          xtermRef.current.write('user@localhost:~/project$ ');
+        }
+        setState(prev => ({
+          ...prev,
+          executionStatus: 'cancelled',
+        }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
   
   // Authentication functions
   const handleHostIdSubmit = async () => {
@@ -502,10 +657,27 @@ const App: React.FC = () => {
       });
       
       if (!response.ok) {
-        throw new Error('セッションの作成に失敗しました');
+        if (response.status === 404) {
+          throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+        } else if (response.status === 500) {
+          throw new Error('ホストサーバーに接続できません');
+        } else {
+          throw new Error('接続エラーが発生しました');
+        }
       }
       
       const data = await response.json();
+      
+      // Generate QR Code for TOTP
+      const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${data.totpSecret}&issuer=Vibe%20Coder`;
+      const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
       
       setState(prev => ({ 
         ...prev, 
@@ -514,6 +686,8 @@ const App: React.FC = () => {
           status: 'entering_totp',
           sessionId: data.sessionId,
           totpSecret: data.totpSecret,
+          qrCodeUrl: qrCodeDataUrl,
+          totpInput: '', // Clear TOTP input
         }
       }));
 
@@ -526,13 +700,51 @@ const App: React.FC = () => {
   };
 
   const handleTotpSubmit = async (totpCode: string) => {
-    if (!state.auth.sessionId) return;
-
     try {
       setState(prev => ({ 
         ...prev, 
         auth: { ...prev.auth, error: null }
       }));
+
+      // If no sessionId, create a new session first
+      if (!state.auth.sessionId) {
+        const sessionResponse = await fetch('http://localhost:8080/api/auth/sessions', {
+          method: 'POST',
+        });
+        
+        if (!sessionResponse.ok) {
+          if (sessionResponse.status === 404) {
+            throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+          } else if (sessionResponse.status === 500) {
+            throw new Error('ホストサーバーに接続できません');
+          } else {
+            throw new Error('接続エラーが発生しました');
+          }
+        }
+        
+        const sessionData = await sessionResponse.json();
+        
+        // Generate QR Code for TOTP
+        const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${sessionData.totpSecret}&issuer=Vibe%20Coder`;
+        const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
+          width: 256,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff'
+          }
+        });
+        
+        setState(prev => ({ 
+          ...prev, 
+          auth: { 
+            ...prev.auth, 
+            sessionId: sessionData.sessionId,
+            totpSecret: sessionData.totpSecret,
+            qrCodeUrl: qrCodeDataUrl,
+          }
+        }));
+      }
 
       const response = await fetch(`http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`, {
         method: 'POST',
@@ -541,7 +753,24 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('認証に失敗しました');
+        if (response.status === 401) {
+          throw new Error('認証コードが正しくありません');
+        } else if (response.status === 404) {
+          // Session expired, need to create new session
+          setState(prev => ({ 
+            ...prev, 
+            auth: { 
+              ...prev.auth, 
+              sessionId: null,
+              totpSecret: null,
+              qrCodeUrl: null,
+              totpInput: '', // Clear TOTP input
+            }
+          }));
+          throw new Error('セッションが期限切れです。もう一度認証コードを入力してください');
+        } else {
+          throw new Error('サーバーエラーが発生しました');
+        }
       }
 
       const data = await response.json();
@@ -556,10 +785,7 @@ const App: React.FC = () => {
           }
         }));
         
-        // Start WebRTC connection after successful authentication
-        setTimeout(() => {
-          initWebRTCConnection();
-        }, 1000);
+        // WebRTC connection will be started automatically after authentication
       } else {
         throw new Error(data.message || '認証に失敗しました');
       }
@@ -567,7 +793,11 @@ const App: React.FC = () => {
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
-        auth: { ...prev.auth, error: error instanceof Error ? error.message : '認証エラー' }
+        auth: { 
+          ...prev.auth, 
+          error: error instanceof Error ? error.message : '認証エラー',
+          totpInput: '', // Clear TOTP input on error
+        }
       }));
     }
   };
@@ -580,6 +810,58 @@ const App: React.FC = () => {
         executeCommand(state.textInput);
       }
       setState(prev => ({ ...prev, textInput: '' }));
+    }
+  };
+
+  const handleVoiceToggle = () => {
+    if (!state.voiceSupported || !recognitionRef.current) return;
+
+    if (state.isRecording) {
+      // Stop recording
+      recognitionRef.current.stop();
+    } else {
+      // Start recording
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Failed to start voice recognition:', error);
+        if (xtermRef.current) {
+          xtermRef.current.write(`\r\n❌ Voice recognition failed to start\r\n`);
+        }
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    // Close WebRTC connections
+    if (state.peerConnection) {
+      state.peerConnection.close();
+    }
+    if (state.dataChannel) {
+      state.dataChannel.close();
+    }
+
+    // Return to 2FA screen (keep hostId and session info)
+    setState(prev => ({
+      ...prev,
+      auth: {
+        ...prev.auth,
+        status: 'entering_totp',
+        jwt: null,
+        error: null,
+        totpInput: '', // Clear TOTP input
+      },
+      connectionStatus: { isConnected: false },
+      peerConnection: null,
+      dataChannel: null,
+      executionStatus: 'idle',
+      promptMessage: null,
+    }));
+
+    // Clear terminal
+    if (xtermRef.current) {
+      xtermRef.current.clear();
+      xtermRef.current.write('Logged out. Please enter 2FA code to reconnect.\r\n');
     }
   };
   
@@ -623,7 +905,15 @@ const App: React.FC = () => {
               />
               
               {state.auth.error && (
-                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-400 text-lg">❌</span>
+                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                  </div>
+                  <p className="text-red-300 text-xs mt-1 opacity-80">
+                    ホストサーバーが起動していることを確認してください。
+                  </p>
+                </div>
               )}
               
               <button
@@ -645,12 +935,19 @@ const App: React.FC = () => {
           <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">2FA認証</h2>
-              <p className="text-sm opacity-80 mb-4">TOTP秘密鍵をAuthenticatorアプリに登録してください</p>
+              <p className="text-sm opacity-80 mb-4">QRコードをAuthenticatorアプリでスキャンしてください</p>
               
-              {state.auth.totpSecret && (
-                <div className="bg-white/5 rounded-lg p-3 mb-4">
-                  <p className="text-xs opacity-60 mb-2">TOTP秘密鍵:</p>
-                  <p className="font-mono text-sm break-all select-all">{state.auth.totpSecret}</p>
+              {state.auth.qrCodeUrl && (
+                <div className="bg-white/10 rounded-lg p-4 mb-4 flex flex-col items-center">
+                  <img 
+                    src={state.auth.qrCodeUrl} 
+                    alt="TOTP QR Code" 
+                    className="w-48 h-48 mb-3"
+                  />
+                  <p className="text-xs opacity-70 mb-2">手動入力用秘密鍵:</p>
+                  <p className="font-mono text-xs break-all select-all bg-white/5 rounded p-2 w-full">
+                    {state.auth.totpSecret}
+                  </p>
                 </div>
               )}
             </div>
@@ -658,26 +955,47 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <input
                 type="text"
+                value={state.auth.totpInput}
                 onChange={(e) => {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setState(prev => ({
+                    ...prev,
+                    auth: { ...prev.auth, totpInput: code }
+                  }));
                   if (code.length === 6) {
                     handleTotpSubmit(code);
                   }
                 }}
                 className="w-full p-4 bg-white/10 rounded-lg text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="123456"
+                placeholder="000000"
                 maxLength={6}
                 autoFocus
               />
               
               {state.auth.error && (
-                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-400 text-lg">❌</span>
+                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                  </div>
+                  <p className="text-red-300 text-xs mt-1 opacity-80">
+                    認証コードを確認してください。時間切れの場合は新しいコードを入力してください。
+                  </p>
+                </div>
               )}
               
               <button
                 onClick={() => setState(prev => ({ 
                   ...prev, 
-                  auth: { ...prev.auth, status: 'entering_host_id', error: null }
+                  auth: { 
+                    ...prev.auth, 
+                    status: 'entering_host_id', 
+                    error: null,
+                    totpSecret: null,
+                    qrCodeUrl: null,
+                    sessionId: null,
+                    totpInput: '', // Clear TOTP input
+                  }
                 }))}
                 className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
               >
@@ -737,13 +1055,23 @@ const App: React.FC = () => {
           </div>
           
           <button 
-            onClick={() => setState(prev => ({ ...prev, isRecording: !prev.isRecording }))}
+            onClick={handleVoiceToggle}
             className={`touch-friendly rounded-full backdrop-blur-sm transition-all ${state.isRecording ? 'bg-red-500 pulse-recording' : 'glass-morphism hover:bg-white/20'} ${!state.voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={state.voiceSupported ? 'Voice input' : 'Voice input not supported'}
+            title={state.voiceSupported ? (state.isRecording ? 'Stop recording' : 'Start voice input') : 'Voice input not supported'}
             disabled={!state.voiceSupported}
           >
             <Mic className="w-4 h-4" />
           </button>
+          
+          {state.auth.status === 'authenticated' && (
+            <button 
+              onClick={handleLogout}
+              className="touch-friendly glass-morphism rounded-full hover:bg-white/20"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
           
           <button 
             onClick={() => setState(prev => ({ ...prev, showSettings: true }))}
@@ -902,7 +1230,7 @@ const App: React.FC = () => {
                 <span className="text-sm">{state.voiceSupported ? 'Available' : 'Not supported'}</span>
               </div>
               <p className="text-xs opacity-60 mt-1">
-                {state.voiceSupported ? 'Tap microphone button and speak your command' : 'Voice recognition is not supported in this browser'}
+                {state.voiceSupported ? 'Tap microphone button and speak commands in Japanese or English' : 'Voice recognition is not supported in this browser'}
               </p>
             </div>
 
