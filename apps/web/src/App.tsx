@@ -8,12 +8,14 @@ import {
   WifiOff,
   ArrowUp,
   ArrowDown,
-  CornerDownLeft
+  CornerDownLeft,
+  LogOut
 } from 'lucide-react';
 import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
 import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import QRCode from 'qrcode';
 
 // Web Speech API type declarations
 declare global {
@@ -77,6 +79,7 @@ interface AuthState {
   hostId: string;
   sessionId: string | null;
   totpSecret: string | null;
+  qrCodeUrl: string | null;
   jwt: string | null;
   error: string | null;
 }
@@ -114,6 +117,7 @@ const initialState: AppState = {
     hostId: '',
     sessionId: null,
     totpSecret: null,
+    qrCodeUrl: null,
     jwt: null,
     error: null,
   },
@@ -626,10 +630,27 @@ const App: React.FC = () => {
       });
       
       if (!response.ok) {
-        throw new Error('セッションの作成に失敗しました');
+        if (response.status === 404) {
+          throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+        } else if (response.status === 500) {
+          throw new Error('ホストサーバーに接続できません');
+        } else {
+          throw new Error('接続エラーが発生しました');
+        }
       }
       
       const data = await response.json();
+      
+      // Generate QR Code for TOTP
+      const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${data.totpSecret}&issuer=Vibe%20Coder`;
+      const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
       
       setState(prev => ({ 
         ...prev, 
@@ -638,6 +659,7 @@ const App: React.FC = () => {
           status: 'entering_totp',
           sessionId: data.sessionId,
           totpSecret: data.totpSecret,
+          qrCodeUrl: qrCodeDataUrl,
         }
       }));
 
@@ -665,7 +687,13 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('認証に失敗しました');
+        if (response.status === 401) {
+          throw new Error('認証コードが正しくありません');
+        } else if (response.status === 404) {
+          throw new Error('セッションが見つかりません');
+        } else {
+          throw new Error('サーバーエラーが発生しました');
+        }
       }
 
       const data = await response.json();
@@ -680,10 +708,7 @@ const App: React.FC = () => {
           }
         }));
         
-        // Start WebRTC connection after successful authentication
-        setTimeout(() => {
-          initWebRTCConnection();
-        }, 1000);
+        // WebRTC connection will be started automatically after authentication
       } else {
         throw new Error(data.message || '認証に失敗しました');
       }
@@ -723,6 +748,41 @@ const App: React.FC = () => {
           xtermRef.current.write(`\r\n❌ Voice recognition failed to start\r\n`);
         }
       }
+    }
+  };
+
+  const handleLogout = () => {
+    // Close WebRTC connections
+    if (state.peerConnection) {
+      state.peerConnection.close();
+    }
+    if (state.dataChannel) {
+      state.dataChannel.close();
+    }
+
+    // Reset authentication state
+    setState(prev => ({
+      ...prev,
+      auth: {
+        status: 'unauthenticated',
+        hostId: '',
+        sessionId: null,
+        totpSecret: null,
+        qrCodeUrl: null,
+        jwt: null,
+        error: null,
+      },
+      connectionStatus: { isConnected: false },
+      peerConnection: null,
+      dataChannel: null,
+      executionStatus: 'idle',
+      promptMessage: null,
+    }));
+
+    // Clear terminal
+    if (xtermRef.current) {
+      xtermRef.current.clear();
+      xtermRef.current.write('Logged out. Please reconnect.\r\n');
     }
   };
   
@@ -766,7 +826,15 @@ const App: React.FC = () => {
               />
               
               {state.auth.error && (
-                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-400 text-lg">❌</span>
+                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                  </div>
+                  <p className="text-red-300 text-xs mt-1 opacity-80">
+                    ホストサーバーが起動していることを確認してください。
+                  </p>
+                </div>
               )}
               
               <button
@@ -788,12 +856,19 @@ const App: React.FC = () => {
           <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">2FA認証</h2>
-              <p className="text-sm opacity-80 mb-4">TOTP秘密鍵をAuthenticatorアプリに登録してください</p>
+              <p className="text-sm opacity-80 mb-4">QRコードをAuthenticatorアプリでスキャンしてください</p>
               
-              {state.auth.totpSecret && (
-                <div className="bg-white/5 rounded-lg p-3 mb-4">
-                  <p className="text-xs opacity-60 mb-2">TOTP秘密鍵:</p>
-                  <p className="font-mono text-sm break-all select-all">{state.auth.totpSecret}</p>
+              {state.auth.qrCodeUrl && (
+                <div className="bg-white/10 rounded-lg p-4 mb-4 flex flex-col items-center">
+                  <img 
+                    src={state.auth.qrCodeUrl} 
+                    alt="TOTP QR Code" 
+                    className="w-48 h-48 mb-3"
+                  />
+                  <p className="text-xs opacity-70 mb-2">手動入力用秘密鍵:</p>
+                  <p className="font-mono text-xs break-all select-all bg-white/5 rounded p-2 w-full">
+                    {state.auth.totpSecret}
+                  </p>
                 </div>
               )}
             </div>
@@ -808,19 +883,34 @@ const App: React.FC = () => {
                   }
                 }}
                 className="w-full p-4 bg-white/10 rounded-lg text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
-                placeholder="123456"
+                placeholder="000000"
                 maxLength={6}
                 autoFocus
               />
               
               {state.auth.error && (
-                <p className="text-red-400 text-sm text-center">{state.auth.error}</p>
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-red-400 text-lg">❌</span>
+                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                  </div>
+                  <p className="text-red-300 text-xs mt-1 opacity-80">
+                    認証コードを確認してください。時間切れの場合は新しいコードを入力してください。
+                  </p>
+                </div>
               )}
               
               <button
                 onClick={() => setState(prev => ({ 
                   ...prev, 
-                  auth: { ...prev.auth, status: 'entering_host_id', error: null }
+                  auth: { 
+                    ...prev.auth, 
+                    status: 'entering_host_id', 
+                    error: null,
+                    totpSecret: null,
+                    qrCodeUrl: null,
+                    sessionId: null
+                  }
                 }))}
                 className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
               >
@@ -887,6 +977,16 @@ const App: React.FC = () => {
           >
             <Mic className="w-4 h-4" />
           </button>
+          
+          {state.auth.status === 'authenticated' && (
+            <button 
+              onClick={handleLogout}
+              className="touch-friendly glass-morphism rounded-full hover:bg-white/20"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
           
           <button 
             onClick={() => setState(prev => ({ ...prev, showSettings: true }))}

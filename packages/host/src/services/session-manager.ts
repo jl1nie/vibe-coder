@@ -1,4 +1,4 @@
-import { generateHostId, generateSessionId } from '../../../shared/src';
+import { generateSessionId } from '../../../shared/src';
 import speakeasy from 'speakeasy';
 import jwt from 'jsonwebtoken';
 import { SessionData } from '../types';
@@ -11,7 +11,7 @@ export class SessionManager {
   private cleanupInterval!: NodeJS.Timeout;
 
   constructor() {
-    this.hostId = generateHostId();
+    this.hostId = hostConfig.hostId;
     this.startCleanupTimer();
     logger.info('Session Manager initialized', { hostId: this.hostId });
   }
@@ -23,19 +23,13 @@ export class SessionManager {
   public async createSession(): Promise<{ sessionId: string; totpSecret: string }> {
     const sessionId = generateSessionId();
     
-    // Generate TOTP secret
-    const secret = speakeasy.generateSecret({
-      name: `Vibe Coder (${sessionId})`,
-      issuer: 'Vibe Coder',
-      length: 32,
-    });
-
-    // TOTP secret will be displayed as text for manual entry
+    // Use persistent TOTP secret from config (shared across all sessions)
+    const totpSecret = hostConfig.totpSecret;
 
     const session: SessionData = {
       id: sessionId,
       hostId: this.hostId,
-      totpSecret: secret.base32!,
+      totpSecret: totpSecret,
       isAuthenticated: false,
       createdAt: new Date(),
       lastActivity: new Date(),
@@ -46,7 +40,7 @@ export class SessionManager {
     
     logger.info('Session created', { sessionId, hostId: this.hostId });
     
-    return { sessionId, totpSecret: secret.base32! };
+    return { sessionId, totpSecret };
   }
 
   public verifyTotp(sessionId: string, token: string): boolean {

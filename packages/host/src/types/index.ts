@@ -25,6 +25,7 @@ export interface HostConfig {
   claudeConfigPath: string;
   signalingUrl: string;
   sessionSecret: string;
+  totpSecret: string;
   maxConcurrentSessions: number;
   commandTimeout: number;
   enableSecurity: boolean;

@@ -44,12 +44,6 @@ export const DEFAULT_PLAYLIST: {
   },
   commands: [
     {
-      icon: '🔐',
-      label: 'Login',
-      command: 'add user authentication with login and signup',
-      description: 'Add authentication system to the project',
-    },
-    {
       icon: '🐛',
       label: 'Fix Bug',
       command: 'find and fix the bug in this code',
