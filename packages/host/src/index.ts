@@ -181,6 +181,21 @@ class VibeCoderHost {
             environment: process.env.NODE_ENV || 'development',
           });
           
+          // Also save Host ID to workspace for user visibility
+          try {
+            const workspaceDir = '/app/workspace';
+            const fs = require('fs');
+            if (!fs.existsSync(workspaceDir)) {
+              fs.mkdirSync(workspaceDir, { recursive: true });
+            }
+            const hostIdFile = `${workspaceDir}/HOST_ID.txt`;
+            const hostIdContent = `Vibe Coder Host ID: ${this.sessionManager.getHostId()}\n\nUse this ID to connect from your mobile device.\nURL: https://vibe-coder.space\n\nGenerated: ${new Date().toISOString()}\n`;
+            fs.writeFileSync(hostIdFile, hostIdContent);
+            console.log(`Host ID saved to: ${hostIdFile}`);
+          } catch (error) {
+            console.warn('Could not save Host ID to workspace:', (error as Error).message);
+          }
+
           console.log(`
 ╭─────────────────────────────────────────────────────────────╮
 │                                                             │

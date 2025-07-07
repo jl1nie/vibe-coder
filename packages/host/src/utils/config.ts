@@ -9,17 +9,21 @@ import fs from 'fs';
 // Everything uses sensible defaults
 
 function getOrCreateSessionSecret(): string {
-  // Look for saved session secret in project root
+  // Look for saved session secret in .claude directory (most user-friendly)
+  const claudeConfigPath = process.env.CLAUDE_CONFIG_PATH || path.join(process.env.HOME || '~', '.claude');
+  const sessionInClaude = path.join(claudeConfigPath, 'vibe-coder-session-secret');
+  
+  // Fallback paths
   const projectRoot = path.resolve(__dirname, '../../../../..');
   const secretPath = path.resolve(projectRoot, '.session-secret');
   const fallbackSecretPath = path.resolve(process.cwd(), '.session-secret');
   
-  for (const secretFile of [secretPath, fallbackSecretPath]) {
+  for (const secretFile of [sessionInClaude, secretPath, fallbackSecretPath]) {
     try {
       if (fs.existsSync(secretFile)) {
         const savedSecret = fs.readFileSync(secretFile, 'utf8').trim();
         if (savedSecret.length >= 32) {
-          console.log(`Using saved session secret`);
+          console.log(`Using saved session secret (from ${secretFile})`);
           return savedSecret;
         }
       }
@@ -31,14 +35,20 @@ function getOrCreateSessionSecret(): string {
   // Generate new session secret
   const newSecret = generateSessionSecret();
   
-  // Try to save to project root first, fallback to current directory
-  for (const secretFile of [secretPath, fallbackSecretPath]) {
+  // Try to save to .claude directory first (most user-friendly), then fallbacks
+  for (const secretFile of [sessionInClaude, secretPath, fallbackSecretPath]) {
     try {
+      // Ensure directory exists
+      const dir = path.dirname(secretFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+      }
+      
       fs.writeFileSync(secretFile, newSecret, { mode: 0o600 }); // Secure file permissions
-      console.log(`Generated and saved new session secret`);
+      console.log(`Generated and saved new session secret (to ${secretFile})`);
       return newSecret;
     } catch (error) {
-      console.warn(`Failed to save session secret:`, (error as Error).message);
+      console.warn(`Failed to save session secret to ${secretFile}:`, (error as Error).message);
       continue;
     }
   }
@@ -49,17 +59,21 @@ function getOrCreateSessionSecret(): string {
 }
 
 function getOrCreateTotpSecret(): string {
-  // Look for saved TOTP secret in project root
+  // Look for saved TOTP secret in .claude directory (most user-friendly)
+  const claudeConfigPath = process.env.CLAUDE_CONFIG_PATH || path.join(process.env.HOME || '~', '.claude');
+  const totpInClaude = path.join(claudeConfigPath, 'vibe-coder-totp-secret');
+  
+  // Fallback paths
   const projectRoot = path.resolve(__dirname, '../../../../..');
   const secretPath = path.resolve(projectRoot, '.totp-secret');
   const fallbackSecretPath = path.resolve(process.cwd(), '.totp-secret');
   
-  for (const secretFile of [secretPath, fallbackSecretPath]) {
+  for (const secretFile of [totpInClaude, secretPath, fallbackSecretPath]) {
     try {
       if (fs.existsSync(secretFile)) {
         const savedSecret = fs.readFileSync(secretFile, 'utf8').trim();
         if (savedSecret.length >= 16) {
-          console.log(`Using saved TOTP secret`);
+          console.log(`Using saved TOTP secret (from ${secretFile})`);
           return savedSecret;
         }
       }
@@ -77,14 +91,20 @@ function getOrCreateTotpSecret(): string {
   
   const newSecret = secret.base32!;
   
-  // Try to save to project root first, fallback to current directory
-  for (const secretFile of [secretPath, fallbackSecretPath]) {
+  // Try to save to .claude directory first (most user-friendly), then fallbacks
+  for (const secretFile of [totpInClaude, secretPath, fallbackSecretPath]) {
     try {
+      // Ensure directory exists
+      const dir = path.dirname(secretFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+      }
+      
       fs.writeFileSync(secretFile, newSecret, { mode: 0o600 }); // Secure file permissions
-      console.log(`Generated and saved new TOTP secret`);
+      console.log(`Generated and saved new TOTP secret (to ${secretFile})`);
       return newSecret;
     } catch (error) {
-      console.warn(`Failed to save TOTP secret:`, (error as Error).message);
+      console.warn(`Failed to save TOTP secret to ${secretFile}:`, (error as Error).message);
       continue;
     }
   }
@@ -95,17 +115,21 @@ function getOrCreateTotpSecret(): string {
 }
 
 function getOrCreateHostId(): string {
-  // Look for saved Host ID in project root
+  // Look for saved Host ID in .claude directory (most user-friendly)
+  const claudeConfigPath = process.env.CLAUDE_CONFIG_PATH || path.join(process.env.HOME || '~', '.claude');
+  const hostIdInClaude = path.join(claudeConfigPath, 'vibe-coder-host-id');
+  
+  // Fallback paths
   const projectRoot = path.resolve(__dirname, '../../../../..');
   const hostIdPath = path.resolve(projectRoot, '.host-id');
   const fallbackHostIdPath = path.resolve(process.cwd(), '.host-id');
   
-  for (const hostIdFile of [hostIdPath, fallbackHostIdPath]) {
+  for (const hostIdFile of [hostIdInClaude, hostIdPath, fallbackHostIdPath]) {
     try {
       if (fs.existsSync(hostIdFile)) {
         const savedHostId = fs.readFileSync(hostIdFile, 'utf8').trim();
         if (savedHostId.length === 8 && /^\d{8}$/.test(savedHostId)) {
-          console.log(`Using saved Host ID: ${savedHostId}`);
+          console.log(`Using saved Host ID: ${savedHostId} (from ${hostIdFile})`);
           return savedHostId;
         }
       }
@@ -117,14 +141,20 @@ function getOrCreateHostId(): string {
   // Generate new Host ID
   const newHostId = generateHostId();
   
-  // Try to save to project root first, fallback to current directory
-  for (const hostIdFile of [hostIdPath, fallbackHostIdPath]) {
+  // Try to save to .claude directory first (most user-friendly), then fallbacks
+  for (const hostIdFile of [hostIdInClaude, hostIdPath, fallbackHostIdPath]) {
     try {
+      // Ensure directory exists
+      const dir = path.dirname(hostIdFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+      }
+      
       fs.writeFileSync(hostIdFile, newHostId, { mode: 0o600 }); // Secure file permissions
-      console.log(`Generated and saved new Host ID: ${newHostId}`);
+      console.log(`Generated and saved new Host ID: ${newHostId} (to ${hostIdFile})`);
       return newHostId;
     } catch (error) {
-      console.warn(`Failed to save Host ID:`, (error as Error).message);
+      console.warn(`Failed to save Host ID to ${hostIdFile}:`, (error as Error).message);
       continue;
     }
   }
