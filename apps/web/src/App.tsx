@@ -82,6 +82,7 @@ interface AuthState {
   qrCodeUrl: string | null;
   jwt: string | null;
   error: string | null;
+  totpInput: string;
 }
 
 interface AppState {
@@ -120,6 +121,7 @@ const initialState: AppState = {
     qrCodeUrl: null,
     jwt: null,
     error: null,
+    totpInput: '',
   },
   voiceCommandPending: false,
 };
@@ -547,6 +549,7 @@ const App: React.FC = () => {
                 status: 'entering_totp',
                 jwt: null,
                 error: 'セッションが期限切れです。再度認証してください。',
+                totpInput: '', // Clear TOTP input
               },
               connectionStatus: { isConnected: false },
               peerConnection: null,
@@ -684,6 +687,7 @@ const App: React.FC = () => {
           sessionId: data.sessionId,
           totpSecret: data.totpSecret,
           qrCodeUrl: qrCodeDataUrl,
+          totpInput: '', // Clear TOTP input
         }
       }));
 
@@ -760,6 +764,7 @@ const App: React.FC = () => {
               sessionId: null,
               totpSecret: null,
               qrCodeUrl: null,
+              totpInput: '', // Clear TOTP input
             }
           }));
           throw new Error('セッションが期限切れです。もう一度認証コードを入力してください');
@@ -788,7 +793,11 @@ const App: React.FC = () => {
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
-        auth: { ...prev.auth, error: error instanceof Error ? error.message : '認証エラー' }
+        auth: { 
+          ...prev.auth, 
+          error: error instanceof Error ? error.message : '認証エラー',
+          totpInput: '', // Clear TOTP input on error
+        }
       }));
     }
   };
@@ -840,6 +849,7 @@ const App: React.FC = () => {
         status: 'entering_totp',
         jwt: null,
         error: null,
+        totpInput: '', // Clear TOTP input
       },
       connectionStatus: { isConnected: false },
       peerConnection: null,
@@ -945,8 +955,13 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <input
                 type="text"
+                value={state.auth.totpInput}
                 onChange={(e) => {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setState(prev => ({
+                    ...prev,
+                    auth: { ...prev.auth, totpInput: code }
+                  }));
                   if (code.length === 6) {
                     handleTotpSubmit(code);
                   }
@@ -978,7 +993,8 @@ const App: React.FC = () => {
                     error: null,
                     totpSecret: null,
                     qrCodeUrl: null,
-                    sessionId: null
+                    sessionId: null,
+                    totpInput: '', // Clear TOTP input
                   }
                 }))}
                 className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
