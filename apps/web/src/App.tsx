@@ -760,15 +760,12 @@ const App: React.FC = () => {
       state.dataChannel.close();
     }
 
-    // Reset authentication state
+    // Return to 2FA screen (keep hostId and session info)
     setState(prev => ({
       ...prev,
       auth: {
-        status: 'unauthenticated',
-        hostId: '',
-        sessionId: null,
-        totpSecret: null,
-        qrCodeUrl: null,
+        ...prev.auth,
+        status: 'entering_totp',
         jwt: null,
         error: null,
       },
@@ -782,7 +779,7 @@ const App: React.FC = () => {
     // Clear terminal
     if (xtermRef.current) {
       xtermRef.current.clear();
-      xtermRef.current.write('Logged out. Please reconnect.\r\n');
+      xtermRef.current.write('Logged out. Please enter 2FA code to reconnect.\r\n');
     }
   };
   
