@@ -267,9 +267,13 @@ const App: React.FC = () => {
         dc.onclose = () => {
           console.log('Data channel closed');
           if (xtermRef.current) {
-            xtermRef.current.write('\r\nWebRTC Data Channel disconnected.\r\n');
+            xtermRef.current.write('\r\n⚠️ WebRTC Data Channel disconnected. Connection lost.\r\n');
           }
-          setState(prev => ({ ...prev, dataChannel: null }));
+          setState(prev => ({ 
+            ...prev, 
+            dataChannel: null,
+            connectionStatus: { isConnected: false }
+          }));
         };
 
         dc.onerror = (error) => {
@@ -534,6 +538,26 @@ const App: React.FC = () => {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            // Session expired - redirect to 2FA
+            setState(prev => ({
+              ...prev,
+              auth: {
+                ...prev.auth,
+                status: 'entering_totp',
+                jwt: null,
+                error: 'セッションが期限切れです。再度認証してください。',
+              },
+              connectionStatus: { isConnected: false },
+              peerConnection: null,
+              dataChannel: null,
+              executionStatus: 'idle',
+            }));
+            if (xtermRef.current) {
+              xtermRef.current.write('\r\n⚠️ Session expired. Please re-authenticate.\r\n');
+            }
+            return;
+          }
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
@@ -672,13 +696,51 @@ const App: React.FC = () => {
   };
 
   const handleTotpSubmit = async (totpCode: string) => {
-    if (!state.auth.sessionId) return;
-
     try {
       setState(prev => ({ 
         ...prev, 
         auth: { ...prev.auth, error: null }
       }));
+
+      // If no sessionId, create a new session first
+      if (!state.auth.sessionId) {
+        const sessionResponse = await fetch('http://localhost:8080/api/auth/sessions', {
+          method: 'POST',
+        });
+        
+        if (!sessionResponse.ok) {
+          if (sessionResponse.status === 404) {
+            throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+          } else if (sessionResponse.status === 500) {
+            throw new Error('ホストサーバーに接続できません');
+          } else {
+            throw new Error('接続エラーが発生しました');
+          }
+        }
+        
+        const sessionData = await sessionResponse.json();
+        
+        // Generate QR Code for TOTP
+        const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${sessionData.totpSecret}&issuer=Vibe%20Coder`;
+        const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
+          width: 256,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff'
+          }
+        });
+        
+        setState(prev => ({ 
+          ...prev, 
+          auth: { 
+            ...prev.auth, 
+            sessionId: sessionData.sessionId,
+            totpSecret: sessionData.totpSecret,
+            qrCodeUrl: qrCodeDataUrl,
+          }
+        }));
+      }
 
       const response = await fetch(`http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`, {
         method: 'POST',
@@ -690,7 +752,17 @@ const App: React.FC = () => {
         if (response.status === 401) {
           throw new Error('認証コードが正しくありません');
         } else if (response.status === 404) {
-          throw new Error('セッションが見つかりません');
+          // Session expired, need to create new session
+          setState(prev => ({ 
+            ...prev, 
+            auth: { 
+              ...prev.auth, 
+              sessionId: null,
+              totpSecret: null,
+              qrCodeUrl: null,
+            }
+          }));
+          throw new Error('セッションが期限切れです。もう一度認証コードを入力してください');
         } else {
           throw new Error('サーバーエラーが発生しました');
         }
