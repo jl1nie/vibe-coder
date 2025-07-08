@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -57,7 +57,7 @@ interface SessionData {
 // Express app level persistent storage
 const sessions = new Map<string, SessionData>();
 
-const app = express();
+const app: Express = express();
 
 // CORS configuration
 const allowedOrigins = [
@@ -69,7 +69,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: (origin, callback) => {
+  origin: (origin: string | undefined, callback: (err: Error | null, allowed?: boolean) => void) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     
@@ -85,7 +85,7 @@ app.use(cors({
 app.use(express.json());
 
 // Signal endpoint
-app.post('/api/signal', (req, res) => {
+app.post('/api/signal', (req: Request, res: Response) => {
   const message: SignalMessage = req.body;
   
   if (!message.type || !message.sessionId || !message.hostId) {
@@ -232,7 +232,7 @@ app.post('/api/signal', (req, res) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Signaling server is running',
@@ -254,7 +254,7 @@ app.post('/api/session', (req, res) => {
 app.use(express.static('public'));
 
 // Root redirect to PWA
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
   res.redirect('/index.html');
 });
 
