@@ -63,7 +63,7 @@ class VibeCoderHost {
         origin: process.env.CORS_ORIGIN?.split(',') || [
           'http://localhost:5173',
           'http://localhost:5174',
-          'https://vibe-coder.space',
+          'https://www.vibe-coder.space',
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -224,7 +224,7 @@ class VibeCoderHost {
               fs.mkdirSync(workspaceDir, { recursive: true });
             }
             const hostIdFile = `${workspaceDir}/HOST_ID.txt`;
-            const hostIdContent = `Vibe Coder Host ID: ${this.sessionManager.getHostId()}\n\nUse this ID to connect from your mobile device.\nURL: https://vibe-coder.space\n\nGenerated: ${new Date().toISOString()}\n`;
+            const hostIdContent = `Vibe Coder Host ID: ${this.sessionManager.getHostId()}\n\nUse this ID to connect from your mobile device.\nURL: https://www.vibe-coder.space\n\nGenerated: ${new Date().toISOString()}\n`;
             fs.writeFileSync(hostIdFile, hostIdContent);
             console.log(`Host ID saved to: ${hostIdFile}`);
           } catch (error) {
@@ -243,7 +243,7 @@ class VibeCoderHost {
 │  🔑 Host ID: ${this.sessionManager.getHostId()}                                │
 │  📱 Ready for PWA connections                               │
 │                                                             │
-│  🔗 Connect from: https://vibe-coder.space                  │
+│  🔗 Connect from: https://www.vibe-coder.space              │
 │                                                             │
 ╰─────────────────────────────────────────────────────────────╯
           `);

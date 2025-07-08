@@ -144,7 +144,7 @@ const App: React.FC = () => {
   // Server URLs configuration
   const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
     (process.env.NODE_ENV === 'production' 
-      ? 'https://vibe-coder.space' 
+      ? 'https://www.vibe-coder.space' 
       : 'http://localhost:5174');
   const HOST_SERVER_URL = import.meta.env.VITE_HOST_SERVER_URL ||
     (process.env.NODE_ENV === 'production'

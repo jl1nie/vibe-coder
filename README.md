@@ -53,7 +53,7 @@ pnpm install
 
 ### ステップ3: スマホから接続
 
-1. **ブラウザで PWA にアクセス**: https://vibe-coder.space
+1. **ブラウザで PWA にアクセス**: https://www.vibe-coder.space
 2. **8桁キーを入力**: ターミナルに表示された数字（例: 12345678）
 3. **2FA認証**: Google Authenticator で6桁コードを入力
 4. **完了**: スマホからClaude Codeが使えます！

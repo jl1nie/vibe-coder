@@ -33,7 +33,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 
 ### シグナリングサーバー (Vercel)
 
-- **公式サーバー**: `www.vibe-coder.space`
+- **公式サーバー**: `https://www.vibe-coder.space`
 - **WebRTC橋渡し**: Offer/Answer交換の仲介
 - **PWA配信**: 有効なHTTPS証明書でのアプリ配信
 - **一時的セッション管理**: Edge Functions使用、KVサービス不使用
@@ -482,7 +482,7 @@ echo "✅ Ready to code!"
 
 **Vercel自動デプロイ:**
 
-- **ドメイン**: `www.vibe-coder.space`
+- **ドメイン**: `https://www.vibe-coder.space`
 - **自動デプロイ**: GitHub連携（mainブランチpush時）
 - **プレビューデプロイ**: PR作成時の自動デプロイ
 - **環境変数**: Vercelダッシュボードで管理
@@ -573,7 +573,7 @@ pnpm install
    npm install
    npm run dev
    # → 8桁キー: 12345678
-   # → URL: https://vibe-coder.space (PWA)
+   # → URL: https://www.vibe-coder.space (PWA)
    ```
 
 3. **観察ポイント**
@@ -658,7 +658,7 @@ pnpm install
 **現在の稼働状況:**
 
 - ✅ **Host ID**: 27539093 (永続化済み)
-- ✅ **PWA配信**: https://vibe-coder.space (Vercel)
+- ✅ **PWA配信**: https://www.vibe-coder.space (Vercel)
 - ✅ **ビルド成功**: 全パッケージ正常ビルド完了
 - ✅ **Docker環境**: 権限問題修正後の安定動作
 - ✅ **永続化ファイル**: .vibe-coder-\* ファイル群が正常作成
@@ -677,7 +677,7 @@ pnpm install
 cat HOST_ID.txt → "Vibe Coder Host ID: 27539093"
 
 # PWA接続
-curl https://vibe-coder.space → PWA配信確認
+curl https://www.vibe-coder.space → PWA配信確認
 
 # Docker環境確認
 docker-compose up → 正常起動確認済み

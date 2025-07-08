@@ -9,7 +9,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 ### 2025年7月仕様変更後の統合アーキテクチャ
 
 **PWA + シグナリングサーバー統合 (Vercel)**
-- **URL**: `https://vibe-coder.space`
+- **URL**: `https://www.vibe-coder.space`
 - **PWA配信**: `/` → `packages/signaling/public/` (静的配信)
 - **API**: `/api/*` → `packages/signaling/pages/api/*` (Edge Functions)
 - **統合管理**: PWAとAPIが同一プロジェクトで運用
@@ -180,7 +180,7 @@ pnpm dev:pwa
 
 ```bash
 # ネットワーク経由でのアクセス
-# スマホから https://vibe-coder.space にアクセス
+# スマホから https://www.vibe-coder.space にアクセス
 # 8桁Host ID入力 → 2FA認証 → Claude Code実行
 ```
 

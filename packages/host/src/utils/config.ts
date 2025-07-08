@@ -135,7 +135,7 @@ function createDefaultConfig(): HostConfig {
   return {
     port: process.env.NODE_ENV === 'development' ? 8081 : (process.env.PORT ? parseInt(process.env.PORT) : 8080),
     claudeConfigPath: process.env.NODE_ENV === 'development' ? process.cwd() + '/.claude' : '/app/.claude',
-    signalingUrl: process.env.NODE_ENV === 'development' ? 'http://localhost:5174/api/signal' : 'https://vibe-coder.space/api/signal',
+    signalingUrl: process.env.NODE_ENV === 'development' ? 'http://localhost:5174/api/signal' : 'https://www.vibe-coder.space/api/signal',
     sessionSecret: getOrCreateSessionSecret(),
     totpSecret: getOrCreateTotpSecret(),
     maxConcurrentSessions: 10,

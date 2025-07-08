@@ -61,7 +61,7 @@ const app: Express = express();
 
 // CORS configuration
 const allowedOrigins = [
-  'https://vibe-coder.space',
+  'https://www.vibe-coder.space',
   'https://signaling-esp66xdyy-jl1nie-projects.vercel.app',
   'http://localhost:5174',
   'http://localhost:5173',
