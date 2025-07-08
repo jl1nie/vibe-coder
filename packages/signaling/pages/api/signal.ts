@@ -1,11 +1,11 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { 
-  SignalResponse, 
-  WebRTCOffer, 
+import {
+  SignalMessage,
+  SignalResponse,
   WebRTCAnswer,
   WebRTCIceCandidate,
-  SignalMessage
+  WebRTCOffer,
 } from '@vibe-coder/shared';
+import { NextApiRequest, NextApiResponse } from 'next';
 
 // 統一セッション管理 - 全WebRTC情報を一箇所で管理
 interface SessionData {
@@ -15,7 +15,7 @@ interface SessionData {
   createdAt: number;
   lastActivity: number;
   connectedClients: number;
-  
+
   // WebRTC情報
   offer?: WebRTCOffer;
   answer?: WebRTCAnswer;
@@ -23,7 +23,15 @@ interface SessionData {
   clientCandidates: WebRTCIceCandidate[]; // クライアント側のICE Candidates
 }
 
-const sessions = new Map<string, SessionData>();
+// Edge Function stateless問題への対応: globalに永続化
+declare global {
+  var vibeCoderSessions: Map<string, SessionData> | undefined;
+}
+
+const sessions = globalThis.vibeCoderSessions || new Map<string, SessionData>();
+if (!globalThis.vibeCoderSessions) {
+  globalThis.vibeCoderSessions = sessions;
+}
 
 // 5分後に古いセッションを削除
 const SESSION_TIMEOUT = 5 * 60 * 1000;
@@ -37,11 +45,37 @@ const cleanupExpiredSessions = () => {
   }
 };
 
+const allowedOrigins = [
+  'https://vibe-coder.space',
+  'https://vibe-coder.space', // ワイルドカードは手動で判定
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  const origin = req.headers.origin;
+  if (
+    origin &&
+    (allowedOrigins.includes(origin) || origin.endsWith('.vibe-coder.space'))
+  ) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    // テスト環境やDevelopment環境でのoriginが未設定の場合のフォールバック
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
-      error: 'Method not allowed'
+      error: 'Method not allowed',
     });
   }
 
@@ -53,20 +87,29 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!body.type || !body.sessionId || !body.hostId) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request format'
+        error: 'Invalid request format',
       });
     }
 
     // 許可されたtypeかチェック
-    const validTypes = ['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate'];
+    const validTypes = [
+      'create-session',
+      'offer',
+      'answer',
+      'get-offer',
+      'get-answer',
+      'candidate',
+      'get-candidate',
+    ];
     if (!validTypes.includes(body.type)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid request format'
+        error: 'Invalid request format',
       });
     }
 
-    const { type, sessionId, hostId, offer, answer, candidate } = body as SignalMessage;
+    const { type, sessionId, hostId, offer, answer, candidate } =
+      body as SignalMessage;
 
     switch (type) {
       case 'create-session': {
@@ -74,7 +117,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!sessionId || !hostId) {
           return res.status(400).json({
             success: false,
-            error: 'sessionId and hostId are required'
+            error: 'sessionId and hostId are required',
           });
         }
 
@@ -85,14 +128,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
           lastActivity: Date.now(),
           connectedClients: 0,
           hostCandidates: [],
-          clientCandidates: []
+          clientCandidates: [],
         };
 
         sessions.set(sessionId, newSession);
 
         const createResponse: SignalResponse = {
           success: true,
-          message: 'Session created successfully'
+          message: 'Session created successfully',
         };
 
         return res.status(200).json(createResponse);
@@ -103,7 +146,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!offer) {
           return res.status(400).json({
             success: false,
-            error: 'Offer data required'
+            error: 'Offer data required',
           });
         }
 
@@ -117,7 +160,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             lastActivity: Date.now(),
             connectedClients: 0,
             hostCandidates: [],
-            clientCandidates: []
+            clientCandidates: [],
           };
           sessions.set(sessionId, session);
         }
@@ -128,7 +171,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const response: SignalResponse = {
           success: true,
-          message: 'Offer stored successfully'
+          message: 'Offer stored successfully',
         };
 
         return res.status(200).json(response);
@@ -139,7 +182,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!answer) {
           return res.status(400).json({
             success: false,
-            error: 'Answer data required'
+            error: 'Answer data required',
           });
         }
 
@@ -147,7 +190,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!session) {
           return res.status(404).json({
             success: false,
-            error: 'Session not found'
+            error: 'Session not found',
           });
         }
 
@@ -158,7 +201,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const answerResponse: SignalResponse = {
           success: true,
-          message: 'Answer stored successfully'
+          message: 'Answer stored successfully',
         };
 
         return res.status(200).json(answerResponse);
@@ -168,7 +211,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!candidate) {
           return res.status(400).json({
             success: false,
-            error: 'Candidate data required'
+            error: 'Candidate data required',
           });
         }
 
@@ -176,18 +219,18 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!session) {
           return res.status(404).json({
             success: false,
-            error: 'Session not found'
+            error: 'Session not found',
           });
         }
 
         // ホストからの候補かクライアントからの候補かを判定
         // リクエスト元のhostIdがセッションのhostIdと一致するかで判定
         const isFromHost = hostId === session.hostId;
-        
+
         const candidateData: WebRTCIceCandidate = {
           sessionId,
           candidate: JSON.stringify(candidate),
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
 
         if (isFromHost) {
@@ -195,12 +238,12 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         } else {
           session.clientCandidates.push(candidateData);
         }
-        
+
         session.lastActivity = Date.now();
 
         const candidateResponse: SignalResponse = {
           success: true,
-          message: 'Candidate stored successfully'
+          message: 'Candidate stored successfully',
         };
 
         return res.status(200).json(candidateResponse);
@@ -212,7 +255,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!offerSession || !offerSession.offer) {
           return res.status(404).json({
             success: false,
-            error: 'Offer not found'
+            error: 'Offer not found',
           });
         }
 
@@ -220,7 +263,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const offerResponse: SignalResponse = {
           success: true,
-          offer: offerSession.offer
+          offer: offerSession.offer,
         };
 
         return res.status(200).json(offerResponse);
@@ -232,7 +275,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!answerSession || !answerSession.answer) {
           return res.status(404).json({
             success: false,
-            error: 'Answer not found'
+            error: 'Answer not found',
           });
         }
 
@@ -240,7 +283,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const getAnswerResponse: SignalResponse = {
           success: true,
-          answer: answerSession.answer
+          answer: answerSession.answer,
         };
 
         return res.status(200).json(getAnswerResponse);
@@ -251,14 +294,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (!candidateSession) {
           return res.status(404).json({
             success: false,
-            error: 'Session not found'
+            error: 'Session not found',
           });
         }
 
         // リクエスト元に応じて適切な候補を返す
         const isFromHost = hostId === candidateSession.hostId;
         let candidates: WebRTCIceCandidate[];
-        
+
         if (isFromHost) {
           // ホストからのリクエスト → クライアントの候補を返す
           candidates = candidateSession.clientCandidates.splice(0);
@@ -271,7 +314,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const getCandidateResponse: SignalResponse = {
           success: true,
-          candidates: candidates
+          candidates: candidates,
         };
 
         return res.status(200).json(getCandidateResponse);
@@ -280,14 +323,14 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       default:
         return res.status(400).json({
           success: false,
-          error: 'Unknown signal type'
+          error: 'Unknown signal type',
         });
     }
   } catch (error) {
     console.error('Signal handling error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 }

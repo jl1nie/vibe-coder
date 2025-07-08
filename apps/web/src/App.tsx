@@ -10,6 +10,7 @@ import {
   CornerDownLeft,
   LogOut,
   Mic,
+  Power,
   Settings,
   Wifi,
   WifiOff,
@@ -192,10 +193,13 @@ const App: React.FC = () => {
 
   // WebRTC Connection Management
   const initWebRTCConnection = () => {
-    const SIGNALING_SERVER_URL = 'http://localhost:5174';
+    const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'production' 
+      ? 'https://vibe-coder.space' 
+      : 'http://localhost:5174';
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
-    let sessionId: string | null = null;
+    let sessionId: string | null = state.auth.sessionId;
+    let hostId: string = state.auth.hostId;
 
     const createPeerConnection = async () => {
       pc = new RTCPeerConnection({
@@ -209,7 +213,7 @@ const App: React.FC = () => {
           const signalMessage: SignalMessage = {
             type: 'candidate',
             sessionId: sessionId || '',
-            hostId: 'vibe-coder-host',
+            hostId: hostId,
             candidate: event.candidate.toJSON(),
           };
           fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
@@ -241,7 +245,7 @@ const App: React.FC = () => {
           console.log('Data channel message:', event.data);
           try {
             const message = JSON.parse(event.data);
-
+            console.log('Parsed message:', message);
             if (xtermRef.current) {
               switch (message.type) {
                 case 'output':
@@ -315,15 +319,17 @@ const App: React.FC = () => {
     };
 
     const initWebRTC = async () => {
-      // Generate a unique session ID (for simplicity, using a timestamp)
-      sessionId = `session-${Date.now()}`;
+      sessionId = state.auth.sessionId;
+      if (!sessionId) {
+        throw new Error('No authenticated sessionId');
+      }
 
       // Create a new session on the signaling server using unified API
       try {
         const createSessionMessage: SignalMessage = {
           type: 'create-session',
           sessionId: sessionId || '',
-          hostId: 'vibe-coder-host',
+          hostId: hostId,
         };
 
         const sessionResponse = await fetch(
@@ -1171,22 +1177,14 @@ const App: React.FC = () => {
               />
             )}
           </div>
-
           <button
-            onClick={handleVoiceToggle}
-            className={`touch-friendly rounded-full backdrop-blur-sm transition-all ${state.isRecording ? 'bg-red-500 pulse-recording' : 'glass-morphism hover:bg-white/20'} ${!state.voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={
-              state.voiceSupported
-                ? state.isRecording
-                  ? 'Stop recording'
-                  : 'Start voice input'
-                : 'Voice input not supported'
-            }
-            disabled={!state.voiceSupported}
+            onClick={() => executeCommand('/exit')}
+            className="touch-friendly glass-morphism rounded-full hover:bg-white/20 ml-2"
+            title="セッション終了 (/exit)"
+            disabled={isExecuting}
           >
-            <Mic className="w-4 h-4" />
+            <Power className="w-4 h-4" />
           </button>
-
           {state.auth.status === 'authenticated' && (
             <button
               onClick={handleLogout}
@@ -1196,7 +1194,6 @@ const App: React.FC = () => {
               <LogOut className="w-4 h-4" />
             </button>
           )}
-
           <button
             onClick={() => setState(prev => ({ ...prev, showSettings: true }))}
             className="touch-friendly glass-morphism rounded-full hover:bg-white/20"
@@ -1259,33 +1256,44 @@ const App: React.FC = () => {
               >
                 <CornerDownLeft className="w-4 h-4" />
               </button>
-              {/* Cursor Control */}
-              <div className="flex items-center ml-2">
-                <button
-                  onClick={() => {
-                    if (xtermRef.current) {
-                      xtermRef.current.write('\x1b[A'); // Simulate Up arrow key
-                    }
-                  }}
-                  className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center mr-1"
-                  title="Cursor Up"
-                  disabled={isExecuting}
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (xtermRef.current) {
-                      xtermRef.current.write('\x1b[B'); // Simulate Down arrow key
-                    }
-                  }}
-                  className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center"
-                  title="Cursor Down"
-                  disabled={isExecuting}
-                >
-                  <ArrowDown className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  if (xtermRef.current) {
+                    xtermRef.current.write('\x1b[A'); // Up arrow
+                  }
+                }}
+                className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center ml-2"
+                title="Cursor Up"
+                disabled={isExecuting}
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  if (xtermRef.current) {
+                    xtermRef.current.write('\x1b[B'); // Down arrow
+                  }
+                }}
+                className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center"
+                title="Cursor Down"
+                disabled={isExecuting}
+              >
+                <ArrowDown className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleVoiceToggle}
+                className={`ml-2 touch-friendly rounded-full backdrop-blur-sm transition-all ${state.isRecording ? 'bg-red-500 pulse-recording' : 'glass-morphism hover:bg-white/20'} ${!state.voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={
+                  state.voiceSupported
+                    ? state.isRecording
+                      ? 'Stop recording'
+                      : 'Start voice input'
+                    : 'Voice input not supported'
+                }
+                disabled={!state.voiceSupported}
+              >
+                <Mic className="w-4 h-4" />
+              </button>
             </div>
           </div>
 

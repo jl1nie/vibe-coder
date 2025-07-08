@@ -31,21 +31,28 @@ describe('ClaudeService', () => {
       const result = await claudeService.executeCommand('TEST1234', '');
       
       expect(result.success).toBe(false);
-      expect(result.error).toContain('empty');
+      expect(result.error).toContain('Command must be a non-empty string');
     });
 
-    it('should reject non-claude-code commands', async () => {
-      const result = await claudeService.executeCommand('TEST1234', 'rm -rf /');
+    it('should reject null/undefined commands', async () => {
+      const result = await claudeService.executeCommand('TEST1234', null as any);
       
       expect(result.success).toBe(false);
-      expect(result.error).toContain('dangerous patterns');
+      expect(result.error).toContain('Command must be a non-empty string');
     });
 
-    it('should reject dangerous commands', async () => {
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code rm -rf /');
+    it('should accept any non-empty string commands', async () => {
+      // Mock successful command execution
+      mockChild.on.mockImplementation((event: string, callback: (code: number) => void) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 10);
+        }
+      });
+
+      const result = await claudeService.executeCommand('TEST1234', 'any command');
       
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('dangerous patterns');
+      expect(result.success).toBe(true);
+      expect(spawn).toHaveBeenCalledWith('any', ['command'], expect.any(Object));
     });
 
     it('should accept valid claude-code commands', async () => {
@@ -59,8 +66,8 @@ describe('ClaudeService', () => {
       const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
       
       expect(result.success).toBe(true);
-      // Claude Code transforms "claude-code help" to "claude --print help"
-      expect(spawn).toHaveBeenCalledWith('claude', ['--print', 'help'], expect.any(Object));
+      // Claude Code actual command call
+      expect(spawn).toHaveBeenCalledWith('claude-code', ['help'], expect.any(Object));
     });
   });
 

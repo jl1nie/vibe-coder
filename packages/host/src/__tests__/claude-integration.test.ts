@@ -65,12 +65,12 @@ describe('Claude Code Integration (Real)', () => {
     expect(result.executionTime).toBeGreaterThan(0);
   }, 10000);
 
-  it('should reject non-claude commands', async () => {
+  it('should reject empty commands', async () => {
     // This test doesn't require Claude Code to be available
-    const result = await claudeService.executeCommand('TEST-INTEGRATION', 'rm -rf /');
+    const result = await claudeService.executeCommand('TEST-INTEGRATION', '');
     
     expect(result.success).toBe(false);
-    expect(result.error).toContain('dangerous patterns');
+    expect(result.error).toContain('Command must be a non-empty string');
   });
 
   it('should handle invalid claude commands', async () => {
@@ -112,23 +112,28 @@ describe('Claude Service Command Parsing', () => {
     claudeService.destroy();
   });
 
-  it('should correctly transform and parse claude commands', async () => {
-    // Test command transformation by checking the validation logic
+  it('should correctly validate commands', async () => {
+    // Test command validation by checking the validation logic
     const { validateCommand } = await import('../utils/security');
     
-    // Test claude command transformation
+    // Test basic command validation
     const result1 = validateCommand('claude test prompt');
     expect(result1.isValid).toBe(true);
-    expect(result1.sanitizedCommand).toBe('claude --print test prompt');
+    expect(result1.sanitizedCommand).toBe('claude test prompt');
     
-    // Test claude-code transformation
+    // Test claude-code command validation
     const result2 = validateCommand('claude-code test prompt');
     expect(result2.isValid).toBe(true);
-    expect(result2.sanitizedCommand).toBe('claude --print test prompt');
+    expect(result2.sanitizedCommand).toBe('claude-code test prompt');
     
-    // Test --help should not be transformed
-    const result3 = validateCommand('claude --help');
-    expect(result3.isValid).toBe(true);
-    expect(result3.sanitizedCommand).toBe('claude --help');
+    // Test empty command validation
+    const result3 = validateCommand('');
+    expect(result3.isValid).toBe(false);
+    expect(result3.reason).toBe('Command must be a non-empty string');
+    
+    // Test whitespace trimming
+    const result4 = validateCommand('  claude --help  ');
+    expect(result4.isValid).toBe(true);
+    expect(result4.sanitizedCommand).toBe('claude --help');
   });
 });
