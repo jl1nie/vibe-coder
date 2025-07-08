@@ -82,7 +82,8 @@ export class ClaudeService {
           ...process.env,
           // Claude Code will automatically read from ~/.claude or CLAUDE_CONFIG_PATH
           CLAUDE_CONFIG_PATH: hostConfig.claudeConfigPath,
-          HOME: '/app', // Ensure claude-code looks in the right place
+          // Use actual home directory in test environment, /app in production
+          HOME: process.env.NODE_ENV === 'test' ? process.env.HOME || process.cwd() : '/app',
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
