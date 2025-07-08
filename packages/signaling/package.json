@@ -4,7 +4,8 @@
   "private": true,
   "description": "Vibe Coder Signaling Server - WebRTC signaling via Vercel Edge Functions",
   "scripts": {
-    "dev": "echo 'ローカル開発は手動で vercel dev を実行してください。'",
+    "dev": "echo 'Use pnpm dev:vercel to start the development server'",
+    "dev:vercel": "vercel dev --listen 5174",
     "start": "echo '本番はVercel上でのみ動作します。ローカル開発は dev を使ってください。'",
     "build": "tsc",
     "deploy": "vercel --prod",

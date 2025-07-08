@@ -192,7 +192,7 @@ const App: React.FC = () => {
 
   // WebRTC Connection Management
   const initWebRTCConnection = () => {
-    const SIGNALING_SERVER_URL = 'http://localhost:8080';
+    const SIGNALING_SERVER_URL = 'http://localhost:5174';
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
     let sessionId: string | null = null;
@@ -212,7 +212,7 @@ const App: React.FC = () => {
             hostId: 'vibe-coder-host',
             candidate: event.candidate.toJSON(),
           };
-          fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
+          fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(signalMessage),
@@ -327,7 +327,7 @@ const App: React.FC = () => {
         };
 
         const sessionResponse = await fetch(
-          `${SIGNALING_SERVER_URL}/api/webrtc/signal`,
+          `${SIGNALING_SERVER_URL}/api/signal`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -354,7 +354,7 @@ const App: React.FC = () => {
         };
 
         const signalResponse = await fetch(
-          `${SIGNALING_SERVER_URL}/api/webrtc/signal`,
+          `${SIGNALING_SERVER_URL}/api/signal`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -380,7 +380,7 @@ const App: React.FC = () => {
           };
 
           const answerResponse = await fetch(
-            `${SIGNALING_SERVER_URL}/api/webrtc/signal`,
+            `${SIGNALING_SERVER_URL}/api/signal`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -411,7 +411,7 @@ const App: React.FC = () => {
 
           try {
             const candidatesResponse = await fetch(
-              `${SIGNALING_SERVER_URL}/api/webrtc/signal`,
+              `${SIGNALING_SERVER_URL}/api/signal`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
