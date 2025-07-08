@@ -5,9 +5,59 @@
 ## 🎯 プロジェクト品質状況
 
 - **MVP機能**: 100%完成 ✅
-- **テスト品質**: 113/113テスト通過 (100%) ✅  
+- **テスト品質**: 113/113テスト通過 (100%) ✅
 - **E2E環境**: 完全準備済み ✅
 - **コード品質**: TypeScript・ESLint・Prettier (100%) ✅
+
+## 🚨 2025年7月 重要な仕様変更・運用方針転換
+
+### 【背景・目的】
+
+- Edge Function（Vercel Serverless）ではWebRTCシグナリングのための一時的なメモリ永続化ができず、PWAとホストサーバ間の安定したP2P接続確立に支障があった。
+- これを解決するため、PWAとシグナリングAPIを「signaling」プロジェクトに統合し、Vercel上で一元運用する構成へ移行。
+
+### 【主な仕様変更・運用方針】
+
+- **PWA（apps/web）とシグナリングAPI（pages/api/）をsignalingプロジェクトに統合**
+  - PWAのビルド成果物をsignaling/public/に配置し、静的配信とAPIを同一Vercelプロジェクトで管理。
+  - Vercelのプロジェクトも「signaling」に一本化し、旧webプロジェクトは整理。
+- **sessionId/hostIdの統一運用**
+  - PWA側のWebRTCシグナリング用sessionIdを2FA認証で取得したstate.auth.sessionIdに統一。
+  - ホストサーバ側も認証・シグナリング・WebRTC管理すべてで同じsessionIdを利用。
+- **CORS・セキュリティ・パーミッションの整理**
+  - signaling/pages/api/signal.tsでCORSヘッダーをリクエストOriginごとに1つだけ返すよう修正。
+  - コマンドバリデーション（security.ts）は空文字・型チェックのみのシンプルな実装に。
+  - Docker entrypointでUID/GIDをホストと合わせて起動し、マウント先のパーミッション問題を解消。
+- **UI/UX改善**
+  - 電源OFF（Power）ボタンで/exit送信、マイク（Mic）ボタンの位置調整、カーソル上下ボタンの復活、ヘッダーアイコン順の整理など細かなUI改善。
+- **テスト・運用フローの明確化**
+  - 「手動vercel dev→npm start→npm test-full」など、テスト・運用手順を明確化。
+  - Claude CLIのバージョンチェックやDockerイメージ内インストールも本番仕様に統一。
+
+### 【効果・今後の方針】
+
+- Edge Functionのstateless問題を回避し、安定したWebRTCシグナリングを実現。
+- PWAとAPIの一元運用で保守性・拡張性・デプロイ効率が大幅向上。
+- sessionId/hostIdの一意性・整合性が担保され、認証・接続の不整合が解消。
+- CORS/セキュリティ/パーミッション/UXも整理され、ユーザー体験と運用の安定性が向上。
+
+### 【更に変更が必要になった理由】
+
+- Edge Function（Serverless）はリクエストごとにメモリがリセットされるため、WebRTCシグナリングのOffer/Answer管理ができず「Answer not found」等の不整合が頻発。
+- PWAとホストサーバ間でsessionId/hostIdの一意性・整合性が取れず、認証・接続の失敗やセッション不一致が発生。
+- signalingサーバのCORSヘッダーが複数値で返るなど、ブラウザ側でCORSエラーが発生しやすかった。
+- Dockerマウント先のパーミッション不整合やUID/GID不一致によるファイル書き込みエラー。
+- UI/UX要件の高度化（スマホ最適化・操作性・アクセシビリティ・セキュリティ）に伴い、従来構成では柔軟な改善が困難だった。
+
+### 【実装上のポイント】
+
+- sessionId/hostIdを2FA認証時に一元生成し、PWA・API・ホストサーバ全体で統一管理。
+- Vercelプロジェクトを「signaling」に統合し、PWAのビルド成果物をsignaling/public/に配置。
+- signaling/pages/api/signal.tsでCORSヘッダーをリクエストOriginごとに1つだけ返すロジックに修正。
+- Docker entrypointでUID/GIDをホストと同期し、マウント先のパーミッション問題を根本解決。
+- コマンドバリデーション（security.ts）は空文字・型チェックのみのシンプルな実装に。
+- UI/UXはPWAの細部（ボタン配置・アイコン順・キーボード操作・アクセシビリティ等）まで調整。
+- テスト・運用フロー（手動vercel dev→npm start→npm test-full等）を明確化し、開発・CI/CDの再現性を担保。
 
 ## 📋 目次
 
@@ -98,6 +148,7 @@ Vibe Coderはモノレポ構成であり、各サービスを個別に、また�
 # ホストサーバーをDockerで起動
 pnpm start
 ```
+
 コンテナを停止するには `pnpm stop` を使用します。
 
 #### PWA (フロントエンド)
@@ -206,6 +257,7 @@ pnpm build:types
 ### ビルド最適化
 
 #### PWA最適化
+
 ```bash
 # サービスワーカー生成
 pnpm build:sw
@@ -218,6 +270,7 @@ pnpm lighthouse
 ```
 
 #### ホストサーバー最適化
+
 ```bash
 # Tree-shaking適用ビルド
 pnpm build:host --minify
@@ -231,11 +284,13 @@ docker build -f docker/host/Dockerfile.prod .
 ### テスト戦略・実績
 
 **テストピラミッド構成（総計 113+ テスト）**:
+
 - **Unit/Integration Tests**: 113テスト (100%通過) - 高速・包括的
 - **E2E Tests**: 3テストスイート - エンドツーエンド確認
 - **テスト品質**: 100%達成・継続的統合対応
 
 **パッケージ別テスト実績**:
+
 - **@vibe-coder/host**: 46/46テスト ✅ (セッション・Claude統合・WebRTC)
 - **@vibe-coder/web**: 17/17テスト ✅ (React・認証・UI/UX)
 - **@vibe-coder/shared**: 40/40テスト ✅ (型定義・ユーティリティ)
@@ -244,6 +299,7 @@ docker build -f docker/host/Dockerfile.prod .
 ### 基本テスト実行
 
 **簡単実行（推奨）**:
+
 ```bash
 # 全Unit/Integrationテスト (113テスト)
 ./scripts/vibe-coder test
@@ -253,6 +309,7 @@ docker build -f docker/host/Dockerfile.prod .
 ```
 
 **個別パッケージテスト**:
+
 ```bash
 # Host サーバーテスト (46テスト)
 pnpm --filter @vibe-coder/host test --run
@@ -260,7 +317,7 @@ pnpm --filter @vibe-coder/host test --run
 # PWA クライアントテスト (17テスト)
 pnpm --filter @vibe-coder/web test --run
 
-# 共通パッケージテスト (40テスト)  
+# 共通パッケージテスト (40テスト)
 pnpm --filter @vibe-coder/shared test --run
 
 # シグナリングサーバーテスト (10テスト)
@@ -278,12 +335,14 @@ pnpm --filter @vibe-coder/web test:coverage
 E2EテストはPlaywrightを使用し、完全なユーザーフローをテストします。
 
 **自動実行（推奨）**:
+
 ```bash
 # サーバー自動起動・テスト実行・クリーンアップ
 ./scripts/vibe-coder e2e
 ```
 
 **手動実行**:
+
 ```bash
 # 1. Host サーバー起動
 pnpm build
@@ -308,43 +367,52 @@ pnpm exec playwright test --headed
 #### 1. Unit/Integration Tests (113テスト)
 
 **Host パッケージ (46テスト)**:
+
 - セッション管理・JWT認証
 - Claude Code統合・コマンド実行・セキュリティ
 - WebRTC接続・データチャネル
 
 **Web パッケージ (17テスト)**:
+
 - React コンポーネント・認証フロー
 - WebRTC クライアント接続・UI/UX
 
 **Shared パッケージ (40テスト)**:
+
 - 型定義・ユーティリティ・バリデーション
 
 **Signaling パッケージ (10テスト)**:
+
 - WebRTC シグナリング API・Offer/Answer交換
 
 #### 2. E2E Tests (3テストスイート)
 
 **認証フロー (claude-authentication.spec.ts)**:
+
 - Host ID入力・接続・2FA認証・TOTP入力
 - 無効なHost ID・TOTPコードのエラーハンドリング
 
 **Claude コマンド実行 (claude-commands.spec.ts)**:
+
 - /help・/exit コマンド実行
 - 自然言語コマンド・空コマンド処理
 
 **レスポンシブデザイン (responsive-design.spec.ts)**:
+
 - デスクトップ・タブレット・モバイル表示
 - 画面サイズ変更・オリエンテーション対応
 
 ### テスト品質・継続的統合
 
 **品質指標**:
+
 - Unit/Integration: 100% (113/113テスト通過)
 - Code Coverage: 高カバレッジ達成
 - TypeScript: 厳格型チェック通過
 - ESLint・Prettier: コード品質100%
 
 **CI/CD統合**:
+
 ```bash
 # GitHub Actions設定例
 - name: Run All Tests
@@ -360,6 +428,7 @@ pnpm exec playwright test --headed
 ### テスト環境設定
 
 #### Jest設定（Unit/Integration）
+
 ```javascript
 // vitest.config.ts
 import { defineConfig } from 'vitest/config';
@@ -376,15 +445,16 @@ export default defineConfig({
           branches: 80,
           functions: 80,
           lines: 80,
-          statements: 80
-        }
-      }
-    }
-  }
+          statements: 80,
+        },
+      },
+    },
+  },
 });
 ```
 
 #### Playwright設定（E2E）
+
 ```typescript
 // playwright.config.ts
 import { defineConfig, devices } from '@playwright/test';
@@ -418,6 +488,7 @@ export default defineConfig({
 ### テストデータとモック
 
 #### API モック設定
+
 ```typescript
 // test/mocks/api.ts
 import { setupServer } from 'msw/node';
@@ -429,16 +500,16 @@ export const server = setupServer(
       ctx.json({
         sessionId: 'TEST1234',
         hostId: '12345678',
-        totpSecret: 'JBSWY3DPEHPK3PXP'
+        totpSecret: 'JBSWY3DPEHPK3PXP',
       })
     );
   }),
-  
+
   rest.post('/api/sessions/:sessionId/verify', (req, res, ctx) => {
     return res(
       ctx.json({
         success: true,
-        token: 'mock-jwt-token'
+        token: 'mock-jwt-token',
       })
     );
   })
@@ -446,13 +517,18 @@ export const server = setupServer(
 ```
 
 #### WebRTC モック
+
 ```typescript
 // test/mocks/webrtc.ts
 Object.defineProperty(window, 'RTCPeerConnection', {
   writable: true,
   value: jest.fn().mockImplementation(() => ({
-    createOffer: jest.fn().mockResolvedValue({ type: 'offer', sdp: 'mock-sdp' }),
-    createAnswer: jest.fn().mockResolvedValue({ type: 'answer', sdp: 'mock-sdp' }),
+    createOffer: jest
+      .fn()
+      .mockResolvedValue({ type: 'offer', sdp: 'mock-sdp' }),
+    createAnswer: jest
+      .fn()
+      .mockResolvedValue({ type: 'answer', sdp: 'mock-sdp' }),
     setLocalDescription: jest.fn().mockResolvedValue(),
     setRemoteDescription: jest.fn().mockResolvedValue(),
     addIceCandidate: jest.fn().mockResolvedValue(),
@@ -482,6 +558,7 @@ pnpm test:load
 ### テスト品質保証
 
 #### Pre-commit hooks
+
 ```json
 {
   "husky": {
@@ -491,16 +568,13 @@ pnpm test:load
     }
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "pnpm lint --fix",
-      "pnpm format",
-      "pnpm test:related"
-    ]
+    "*.{ts,tsx}": ["pnpm lint --fix", "pnpm format", "pnpm test:related"]
   }
 }
 ```
 
 #### CI/CD テスト
+
 ```yaml
 # .github/workflows/test.yml
 name: Test Suite
@@ -561,25 +635,31 @@ vercel dev --listen 3001
 ### 基本情報確認
 
 #### ルート情報取得
+
 ```bash
 GET http://localhost:8080/
 ```
+
 **レスポンス例:**
+
 ```json
 {
   "name": "Vibe Coder Host",
   "version": "0.1.0",
   "hostId": "53815375",
-  "status": "running", 
+  "status": "running",
   "timestamp": "2025-07-06T15:20:02.062Z"
 }
 ```
 
 #### ヘルスチェック
+
 ```bash
 GET http://localhost:8080/api/health
 ```
+
 **レスポンス例:**
+
 ```json
 {
   "status": "degraded",
@@ -605,11 +685,14 @@ GET http://localhost:8080/api/health
 ### 認証フロー（8桁キー + TOTP 2FA）
 
 #### 1. セッション作成とTOTP秘密鍵取得
+
 ```bash
 POST http://localhost:8080/api/auth/sessions
 Content-Type: application/json
 ```
+
 **レスポンス例:**
+
 ```json
 {
   "sessionId": "SPW49IEP",
@@ -620,6 +703,7 @@ Content-Type: application/json
 ```
 
 #### 2. TOTP認証とJWTトークン取得
+
 ```bash
 POST http://localhost:8080/api/auth/sessions/SPW49IEP/verify
 Content-Type: application/json
@@ -628,7 +712,9 @@ Content-Type: application/json
   "totpCode": "123456"
 }
 ```
+
 **成功レスポンス:**
+
 ```json
 {
   "success": true,
@@ -638,17 +724,20 @@ Content-Type: application/json
 ```
 
 #### 3. セッション状態確認
+
 ```bash
 GET http://localhost:8080/api/auth/sessions/SPW49IEP/status
 ```
 
 #### 4. セッション更新
+
 ```bash
 POST http://localhost:8080/api/auth/sessions/SPW49IEP/refresh
 Authorization: Bearer {jwt_token}
 ```
 
 #### 5. セッション削除（ログアウト）
+
 ```bash
 DELETE http://localhost:8080/api/auth/sessions/SPW49IEP
 Authorization: Bearer {jwt_token}
@@ -657,6 +746,7 @@ Authorization: Bearer {jwt_token}
 ### Claude Code実行
 
 #### コマンド実行
+
 ```bash
 POST http://localhost:8080/api/claude/execute
 Authorization: Bearer {jwt_token}
@@ -668,6 +758,7 @@ Content-Type: application/json
 ```
 
 #### 実行中コマンドの中止
+
 ```bash
 POST http://localhost:8080/api/claude/cancel
 Authorization: Bearer {jwt_token}
@@ -676,6 +767,7 @@ Authorization: Bearer {jwt_token}
 ### WebRTC P2P通信
 
 #### シグナリング（Offer/Answer交換）
+
 ```bash
 POST http://localhost:8080/api/webrtc/signal
 Authorization: Bearer {jwt_token}
@@ -729,20 +821,22 @@ curl -X POST http://localhost:8080/api/claude/execute \
 // ブラウザまたはNode.jsでのWebSocket接続
 const ws = new WebSocket('ws://localhost:8080');
 
-ws.onopen = function() {
+ws.onopen = function () {
   console.log('WebSocket connected');
-  
+
   // Ping送信
-  ws.send(JSON.stringify({type: 'ping'}));
-  
+  ws.send(JSON.stringify({ type: 'ping' }));
+
   // ハートビート送信
-  ws.send(JSON.stringify({
-    type: 'heartbeat',
-    sessionId: 'SPW49IEP'
-  }));
+  ws.send(
+    JSON.stringify({
+      type: 'heartbeat',
+      sessionId: 'SPW49IEP',
+    })
+  );
 };
 
-ws.onmessage = function(event) {
+ws.onmessage = function (event) {
   const data = JSON.parse(event.data);
   console.log('Received:', data);
 };
@@ -795,25 +889,26 @@ export const securityHeaders = {
   'X-XSS-Protection': '1; mode=block',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Content-Security-Policy': "default-src 'self'; connect-src 'self' wss:",
-  'Referrer-Policy': 'strict-origin-when-cross-origin'
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
 export const rateLimiter = new Map();
 
 export function checkRateLimit(ip: string): boolean {
   const now = Date.now();
-  const windowStart = now - (15 * 60 * 1000); // 15分
-  
+  const windowStart = now - 15 * 60 * 1000; // 15分
+
   if (!rateLimiter.has(ip)) {
     rateLimiter.set(ip, []);
   }
-  
-  const requests = rateLimiter.get(ip)!
+
+  const requests = rateLimiter
+    .get(ip)!
     .filter((time: number) => time > windowStart);
-  
+
   requests.push(now);
   rateLimiter.set(ip, requests);
-  
+
   return requests.length <= 100; // 15分間で100リクエストまで
 }
 ```
@@ -936,6 +1031,7 @@ jobs:
 ### 配布戦略
 
 #### Docker Hub公開
+
 ```bash
 # 手動プッシュ（緊急時）
 docker tag vibe-coder:latest jl1nie/vibe-coder:v1.0.0
@@ -948,6 +1044,7 @@ git push origin v1.0.0  # 自動的にCI/CDがトリガー
 ```
 
 #### GitHub Container Registry
+
 ```bash
 # 代替レジストリとしてGHCRも利用
 echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin
@@ -958,6 +1055,7 @@ docker push ghcr.io/username/vibe-coder:latest
 ### セキュリティ考慮事項
 
 #### イメージスキャニング
+
 ```bash
 # Trivy によるセキュリティスキャン
 trivy image jl1nie/vibe-coder:latest
@@ -967,6 +1065,7 @@ docker scout cves jl1nie/vibe-coder:latest
 ```
 
 #### 最小権限の原則
+
 ```dockerfile
 # ルートユーザーを使用しない
 FROM node:18-alpine
@@ -1012,6 +1111,7 @@ docker run --read-only --tmpfs /tmp --tmpfs /app/logs vibe-coder:latest
 ### 自動デプロイパイプライン
 
 #### 1. PWA デプロイ（Vercel）
+
 ```bash
 # 自動デプロイ設定
 # main ブランチへのpush → 本番デプロイ
@@ -1023,6 +1123,7 @@ vercel --prod
 ```
 
 #### 2. Docker イメージ配布
+
 ```bash
 # GitHub Actionsによる自動ビルド・プッシュ
 # git tag v1.0.0 → 自動的にDocker Hubへプッシュ
@@ -1032,6 +1133,7 @@ curl -s https://hub.docker.com/v2/repositories/jl1nie/vibe-coder/tags/
 ```
 
 #### 3. シグナリングサーバーデプロイ
+
 ```bash
 # Vercel への自動デプロイ
 cd packages/signaling
@@ -1044,6 +1146,7 @@ vercel domains add signal.vibe-coder.space
 ### 環境別設定
 
 #### Production
+
 ```bash
 # docker-compose.prod.yml
 version: '3.8'
@@ -1069,6 +1172,7 @@ services:
 ```
 
 #### Staging
+
 ```bash
 # docker-compose.staging.yml
 version: '3.8'
@@ -1102,6 +1206,7 @@ vercel env add MAINTENANCE_MODE true  # メンテナンス画面を表示
 ### 監視・ログ
 
 #### アプリケーション監視
+
 ```bash
 # ヘルスチェック
 curl -f http://localhost:8080/health
@@ -1114,9 +1219,10 @@ docker logs vibe-coder-host -f
 ```
 
 #### Vercel監視
+
 ```bash
 # Vercel Analytics
-vercel analytics  
+vercel analytics
 
 # Function logs
 vercel logs
@@ -1130,6 +1236,7 @@ vercel inspect https://vibe-coder.space
 ### 開発環境のトラブル
 
 #### Node.js バージョン問題
+
 ```bash
 # 現在のバージョン確認
 node --version
@@ -1148,6 +1255,7 @@ nvm use 18.19.0
 ```
 
 #### パッケージ依存関係エラー
+
 ```bash
 # キャッシュクリア
 pnpm store prune
@@ -1163,6 +1271,7 @@ pnpm outdated
 ```
 
 #### TypeScript コンパイルエラー
+
 ```bash
 # 型チェック
 pnpm typecheck
@@ -1180,6 +1289,7 @@ npx tsc --traceResolution
 ### ビルド・デプロイのトラブル
 
 #### Docker ビルドエラー
+
 ```bash
 # ビルドログの詳細表示
 docker build --no-cache --progress=plain .
@@ -1193,6 +1303,7 @@ docker history vibe-coder:latest
 ```
 
 #### Vercel デプロイエラー
+
 ```bash
 # ローカルでVercel環境をテスト
 vercel dev
@@ -1210,6 +1321,7 @@ vercel inspect
 ### 実行時のトラブル
 
 #### WebRTC接続エラー
+
 ```bash
 # STUN/TURNサーバー確認
 curl -v stun:stun.l.google.com:19302
@@ -1222,6 +1334,7 @@ export DEBUG=simple-peer
 ```
 
 #### Claude API エラー
+
 ```bash
 # API キー確認
 echo $CLAUDE_API_KEY | cut -c1-10  # 最初の10文字のみ表示
@@ -1235,6 +1348,7 @@ curl -I https://api.anthropic.com/v1/messages
 ```
 
 #### パフォーマンス問題
+
 ```bash
 # メモリ使用量監視
 docker stats vibe-coder-host
@@ -1252,6 +1366,7 @@ node --inspect dist/index.js
 ### ログ分析
 
 #### アプリケーションログ
+
 ```bash
 # 構造化ログの確認
 docker logs vibe-coder-host | jq '.'
@@ -1264,6 +1379,7 @@ export LOG_LEVEL=debug
 ```
 
 #### ネットワークログ
+
 ```bash
 # WebRTC接続ログ
 export DEBUG=simple-peer
@@ -1278,14 +1394,17 @@ export DEBUG=ws:*
 ### デバッグツール
 
 #### ブラウザ開発者ツール
+
 ```javascript
 // WebRTC接続状態確認
-navigator.mediaDevices.getUserMedia({audio: true})
+navigator.mediaDevices
+  .getUserMedia({ audio: true })
   .then(stream => console.log('Audio access:', stream))
   .catch(err => console.error('Audio error:', err));
 
 // PWA状態確認
-navigator.serviceWorker.getRegistrations()
+navigator.serviceWorker
+  .getRegistrations()
   .then(registrations => console.log('SW:', registrations));
 
 // ネットワーク状態確認
@@ -1293,6 +1412,7 @@ navigator.connection && console.log('Network:', navigator.connection);
 ```
 
 #### Node.js デバッグ
+
 ```bash
 # デバッガーで起動
 node --inspect-brk dist/index.js
@@ -1309,6 +1429,7 @@ node --heapdump dist/index.js
 このドキュメントで開発・デプロイメントの全プロセスがカバーされています。問題が発生した場合は、該当するセクションを参照してください。
 
 さらなる技術的詳細は以下のドキュメントを参照：
+
 - [📋 CONFIG_DOCUMENTATION.md](./CONFIG_DOCUMENTATION.md) - 設定ファイルの詳細
 - [🚀 DEPLOYMENT_MANUAL.md](./DEPLOYMENT_MANUAL.md) - デプロイメント手順
 - [🔒 SECURITY.md](./SECURITY.md) - セキュリティガイド
