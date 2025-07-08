@@ -15,28 +15,30 @@ USER_GID=$HOST_GID
 
 echo "Setting up runtime user with UID:$USER_UID, GID:$USER_GID"
 
-# グループが存在しない場合は作成
-if ! getent group $USER_GID > /dev/null 2>&1; then
-    addgroup -g $USER_GID -S vibecoder
-    GROUP_NAME="vibecoder"
-else
-    GROUP_NAME=$(getent group $USER_GID | cut -d: -f1)
-    echo "Using existing group: $GROUP_NAME"
+# 既存のユーザー/グループを削除（UID/GID重複を避けるため）
+# まず、指定されたUIDのユーザーが存在する場合は削除
+if getent passwd $USER_UID > /dev/null 2>&1; then
+    EXISTING_USER=$(getent passwd $USER_UID | cut -d: -f1)
+    echo "Removing existing user: $EXISTING_USER (UID: $USER_UID)"
+    deluser $EXISTING_USER 2>/dev/null || true
 fi
 
-# ユーザーが存在しない場合は作成
-if ! getent passwd $USER_UID > /dev/null 2>&1; then
-    adduser -S vibecoder -u $USER_UID -G $GROUP_NAME
-    USER_NAME="vibecoder"
-else
-    USER_NAME=$(getent passwd $USER_UID | cut -d: -f1)
-    echo "Using existing user: $USER_NAME"
+# 指定されたGIDのグループが存在する場合は削除
+if getent group $USER_GID > /dev/null 2>&1; then
+    EXISTING_GROUP=$(getent group $USER_GID | cut -d: -f1)
+    echo "Removing existing group: $EXISTING_GROUP (GID: $USER_GID)"
+    delgroup $EXISTING_GROUP 2>/dev/null || true
 fi
 
-# ディレクトリの所有権を実行時に設定
-chown -R $USER_UID:$USER_GID /app/.claude /app/logs /app/workspace /app/packages 2>/dev/null || true
+# 新しいグループを作成
+echo "Creating group: vibecoder (GID: $USER_GID)"
+addgroup -g $USER_GID -S vibecoder
 
-echo "Starting application as $USER_NAME ($USER_UID:$USER_GID)"
+# 新しいユーザーを作成
+echo "Creating user: vibecoder (UID: $USER_UID, GID: $USER_GID)"
+adduser -S vibecoder -u $USER_UID -G vibecoder
+
+echo "Starting application as vibecoder ($USER_UID:$USER_GID)"
 
 # 指定されたユーザーでアプリケーションを実行
 exec su-exec $USER_UID:$USER_GID "$@"

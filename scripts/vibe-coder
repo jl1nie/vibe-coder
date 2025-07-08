@@ -103,12 +103,12 @@ show_host_id() {
         if [[ "$HOST_ID" =~ ^[0-9]{8}$ ]]; then
             echo
             echo "╔════════════════════════════════════════╗"
-            echo "║              VIBE CODER                ║"
+            echo "║              VIBE CODER               ║"
             echo "║                                        ║"
-            echo "║          Host ID: $HOST_ID          ║"
+            echo "║           Host ID: $HOST_ID            ║"
             echo "║                                        ║"
-            echo "║   スマホでhttps://vibe-coder.spaceを   ║"
-            echo "║   開いてこのIDを入力してください       ║"
+            echo "║  Open https://vibe-coder.space on your  ║"
+            echo "║  phone and enter this Host ID           ║"
             echo "╚════════════════════════════════════════╝"
             echo
             log_success "Host ID: $HOST_ID (Ready for connection)"
@@ -149,10 +149,20 @@ case "$1" in
     log_info "Starting Vibe Coder in production mode..."
     setup_env
     check_requirements
-    # Build once (no UID/GID needed at build time)
-    docker compose -f docker-compose.yml build
-    # Start with runtime UID/GID (passed via environment variables)
-    docker compose -f docker-compose.yml up -d
+    if [[ "$2" == "--no-build" ]]; then
+      if [[ "$3" == "-d" || "$4" == "-d" ]]; then
+        docker compose -f docker-compose.yml up --build -d
+      else
+        docker compose -f docker-compose.yml up --build
+      fi
+    else
+      docker compose -f docker-compose.yml build
+      if [[ "$2" == "-d" || "$3" == "-d" ]]; then
+        docker compose -f docker-compose.yml up -d
+      else
+        docker compose -f docker-compose.yml up
+      fi
+    fi
     show_startup_info
     ;;
   dev)

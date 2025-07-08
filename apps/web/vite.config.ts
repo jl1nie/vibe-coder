@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [
@@ -12,7 +12,8 @@ export default defineConfig({
       manifest: {
         name: 'Vibe Coder',
         short_name: 'VibeCoder',
-        description: 'スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境',
+        description:
+          'スマホから Claude Code を直感的に操作できるモバイル最適化リモート開発環境',
         theme_color: '#1e293b',
         background_color: '#0f172a',
         display: 'standalone',
@@ -70,7 +71,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@vibe-coder/shared': path.resolve(__dirname, '../../packages/shared/src'),
+      '@vibe-coder/shared': path.resolve(
+        __dirname,
+        '../../packages/shared/src'
+      ),
     },
   },
   build: {
@@ -80,15 +84,20 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          terminal: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
+          terminal: [
+            '@xterm/xterm',
+            '@xterm/addon-fit',
+            '@xterm/addon-web-links',
+          ],
           ui: ['lucide-react', 'clsx', 'tailwind-merge'],
         },
       },
     },
   },
   server: {
-    port: 5173,
+    port: 3000,
     host: true,
+    strictPort: true,
   },
   preview: {
     port: 4173,

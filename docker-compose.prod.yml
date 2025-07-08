@@ -27,7 +27,6 @@ services:
       retries: 3
       start_period: 60s
     # セキュリティ設定
-    user: "${HOST_UID:-1001}:${HOST_GID:-1001}"
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m

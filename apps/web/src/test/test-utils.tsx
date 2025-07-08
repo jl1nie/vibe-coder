@@ -1,9 +1,9 @@
+import { render, RenderOptions, waitFor } from '@testing-library/react';
 import React, { ReactElement } from 'react';
-import { render, RenderOptions } from '@testing-library/react';
 import { vi } from 'vitest';
 
 // Import act from react instead of react-dom/test-utils
-export { act } from 'react';
+import { act } from 'react';
 
 // Custom render function with providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
@@ -15,8 +15,29 @@ const customRender = (
   options?: Omit<RenderOptions, 'wrapper'>
 ) => render(ui, { wrapper: AllTheProviders, ...options });
 
+// Helper function to wrap async operations in act
+export const renderWithAct = async (
+  ui: ReactElement,
+  options?: Omit<RenderOptions, 'wrapper'>
+) => {
+  let result: ReturnType<typeof render>;
+
+  await act(async () => {
+    result = customRender(ui, options);
+  });
+
+  return result!;
+};
+
+// Helper function to wait for async operations with act
+export const waitForWithAct = async (callback: () => void | Promise<void>) => {
+  await act(async () => {
+    await waitFor(callback);
+  });
+};
+
 export * from '@testing-library/react';
-export { customRender as render };
+export { act, customRender as render };
 
 // Mock helpers
 export const mockVoiceRecognition = () => {
@@ -75,5 +96,5 @@ export const createMockConnectionStatus = (overrides = {}) => ({
   ...overrides,
 });
 
-export const waitForTimeout = (ms: number) => 
+export const waitForTimeout = (ms: number) =>
   new Promise(resolve => setTimeout(resolve, ms));

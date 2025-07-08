@@ -4,8 +4,9 @@
   "private": true,
   "description": "Vibe Coder Signaling Server - WebRTC signaling via Vercel Edge Functions",
   "scripts": {
+    "dev": "echo 'ローカル開発は手動で vercel dev を実行してください。'",
+    "start": "echo '本番はVercel上でのみ動作します。ローカル開発は dev を使ってください。'",
     "build": "tsc",
-    "start": "vercel dev",
     "deploy": "vercel --prod",
     "clean": "rm -rf .vercel dist",
     "typecheck": "tsc --noEmit",

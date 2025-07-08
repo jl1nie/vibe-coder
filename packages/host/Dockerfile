@@ -56,8 +56,10 @@ RUN pnpm install --frozen-lockfile
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/host/dist ./packages/host/dist
 
-# Create directories with proper permissions (root can create, runtime will fix ownership)
-RUN mkdir -p /app/.claude /app/logs /app/workspace
+# Create directories with permissive permissions (runtime user will be created by entrypoint)
+# This ensures the runtime user can access these directories regardless of UID/GID
+RUN mkdir -p /app/.claude /app/logs /app/workspace && \
+    chmod 755 /app/.claude /app/logs /app/workspace
 
 # Set environment variables
 ENV NODE_ENV=production

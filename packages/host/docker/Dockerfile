@@ -48,7 +48,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Claudeコンフィグディレクトリ作成
 RUN mkdir -p /app/.claude && \
-    chown -R vibe-coder:nodejs /app
+    chmod 755 /app/.claude
 
 # ホームディレクトリ設定
 ENV HOME=/app
