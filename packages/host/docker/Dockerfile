@@ -11,10 +11,6 @@ RUN apk add --no-cache \
     build-base \
     linux-headers
 
-# Claude Code CLIの代替（テスト用モック）
-RUN echo '#!/bin/bash\necho "Claude Code Mock CLI v1.0.0"\nif [ "$1" = "--version" ]; then echo "1.0.0"; exit 0; fi\nif [ "$1" = "/help" ]; then echo "Claude Code Help: /help - Show help, /exit - Exit"; fi\nif [ "$1" = "/exit" ]; then echo "Goodbye!"; exit 0; fi\necho "Mock Claude response: $@"' > /usr/local/bin/claude && \
-    chmod +x /usr/local/bin/claude
-
 # 作業ディレクトリ設定
 WORKDIR /app
 
@@ -53,6 +49,9 @@ RUN mkdir -p /app/.claude && \
 # ホームディレクトリ設定
 ENV HOME=/app
 ENV CLAUDE_CONFIG_PATH=/app/.claude
+
+# Claude Code CLI（本物）をインストール
+RUN npm install -g @anthropic-ai/claude-code
 
 # Claudeセットアップチェック
 RUN claude --version

@@ -40,5 +40,11 @@ adduser -S vibecoder -u $USER_UID -G vibecoder
 
 echo "Starting application as vibecoder ($USER_UID:$USER_GID)"
 
+# Claude CLIのインストール・パス・権限チェック
+if ! claude --version > /dev/null 2>&1; then
+  echo "ERROR: Claude CLI (claude) が見つかりません。インストールまたはパス・権限を確認してください。"
+  exit 1
+fi
+
 # 指定されたユーザーでアプリケーションを実行
 exec su-exec $USER_UID:$USER_GID "$@"
