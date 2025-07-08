@@ -193,9 +193,10 @@ const App: React.FC = () => {
 
   // WebRTC Connection Management
   const initWebRTCConnection = () => {
-    const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'production' 
-      ? 'https://vibe-coder.space' 
-      : 'http://localhost:5174';
+    const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://vibe-coder.space' 
+        : 'http://localhost:5174');
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
     let sessionId: string | null = state.auth.sessionId;

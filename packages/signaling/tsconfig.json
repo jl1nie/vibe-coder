@@ -23,11 +23,6 @@
       "node"
     ],
     "baseUrl": ".",
-    "paths": {
-      "@vibe-coder/shared/*": [
-        "../../packages/shared/src/*"
-      ]
-    },
     "allowJs": true,
     "incremental": true,
     "jsx": "preserve"
