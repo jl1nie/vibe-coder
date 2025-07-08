@@ -1,16 +1,15 @@
 services:
   vibe-coder-host:
     build:
-      context: .
+      context: ../../../
       dockerfile: packages/host/Dockerfile
-    container_name: vibe-coder-host
     ports:
       - "8080:8080"
     volumes:
-      # Claude Code設定をマウント
-      - ~/.claude:/app/.claude
-      # 現在の作業ディレクトリをマウント（vibe-coderファイルの永続化用）
-      - .:/app/workspace
+      # Claudeコンフィグを永続化
+      - claude-config:/app/.claude
+      # カレントディレクトリをマウント（開発用）
+      - ${PWD}:/workspace:rw
     environment:
       - NODE_ENV=production
       - CLAUDE_CONFIG_PATH=/app/.claude
@@ -22,10 +21,14 @@ services:
       - LINES=30
     working_dir: /app
     command: ["node", "packages/host/dist/host/src/index.js"]
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  claude-config:
+    driver: local

@@ -4,14 +4,6 @@ FROM node:20-alpine AS builder
 # Add security and process management packages
 RUN apk add --no-cache dumb-init su-exec
 
-# Environment variables for dynamic UID/GID
-ARG HOST_UID=1001
-ARG HOST_GID=1001
-
-# Create a non-root user with dynamic UID/GID
-RUN addgroup -g ${HOST_GID} -S nodejs && \
-    adduser -S nodejs -u ${HOST_UID} -G nodejs
-
 WORKDIR /app
 
 # Install pnpm and Claude Code as root first
@@ -36,18 +28,8 @@ RUN cd packages/shared && pnpm build
 # Build host package (as root)
 RUN cd packages/host && pnpm build
 
-# Change ownership of everything to nodejs user
-RUN chown -R nodejs:nodejs /app
-
-# Switch to the non-root user
-USER nodejs
-
 # Production stage
 FROM node:20-alpine AS production
-
-# Environment variables for dynamic UID/GID (production)
-ARG HOST_UID=1001
-ARG HOST_GID=1001
 
 WORKDIR /app
 
@@ -62,10 +44,6 @@ RUN apk add --no-cache \
     curl \
     && rm -rf /var/cache/apk/*
 
-# Create non-root user with dynamic UID/GID
-RUN addgroup -g ${HOST_GID} -S nodejs && \
-    adduser -S nodejs -u ${HOST_UID} -G nodejs
-
 # Copy package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
@@ -78,9 +56,8 @@ RUN pnpm install --frozen-lockfile
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/host/dist ./packages/host/dist
 
-# Create directories and set permissions
-RUN mkdir -p /app/.claude /app/logs && \
-    chown -R nodejs:nodejs /app/.claude /app/logs
+# Create directories with proper permissions (root can create, runtime will fix ownership)
+RUN mkdir -p /app/.claude /app/logs /app/workspace
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -94,12 +71,13 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
 
-# Switch to non-root user
-USER nodejs
+# Create entrypoint script for runtime UID/GID setup
+COPY packages/host/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Set working directory to root for dependencies
-WORKDIR /app
+# Set working directory to workspace (user's directory)
+WORKDIR /app/workspace
 
-# Start the application
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "packages/host/dist/host/src/index.js"]
+# Start the application with dynamic user setup
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["node", "/app/packages/host/dist/host/src/index.js"]

@@ -2,6 +2,7 @@ import SimplePeer from 'simple-peer';
 import logger from '../utils/logger';
 import { SessionManager } from './session-manager';
 import { ClaudeService } from './claude-service';
+import { ClaudeInteractiveService } from './claude-interactive-service';
 
 export interface WebRTCConnection {
   id: string;
@@ -14,10 +15,10 @@ export interface WebRTCConnection {
 
 export class WebRTCService {
   private connections = new Map<string, WebRTCConnection>();
-  private claudeService: ClaudeService;
+  private claudeInteractiveService: ClaudeInteractiveService;
 
-  constructor(_sessionManager: SessionManager, claudeService: ClaudeService) {
-    this.claudeService = claudeService;
+  constructor(_sessionManager: SessionManager, _claudeService: ClaudeService) {
+    this.claudeInteractiveService = new ClaudeInteractiveService();
   }
 
   /**
@@ -129,14 +130,69 @@ export class WebRTCService {
         });
         
         try {
-          // Claude Codeコマンドを実行
-          const result = await this.claudeService.executeCommand(message.command, sessionId);
+          // インタラクティブセッションが存在しない場合は作成
+          let session = this.claudeInteractiveService.getSession(sessionId);
+          if (!session) {
+            session = await this.claudeInteractiveService.createSession(sessionId);
+            
+            // セッション作成通知
+            this.sendToPeer(connection, {
+              type: 'output',
+              data: 'Creating Claude interactive session...\r\n'
+            });
+            
+            // セッションがreadyになるまで待機
+            await new Promise<void>((resolve) => {
+              session!.onReady = () => {
+                this.sendToPeer(connection, {
+                  type: 'output',
+                  data: 'Claude session ready! You can now send commands.\r\n'
+                });
+                resolve();
+              };
+              
+              // タイムアウト設定
+              setTimeout(() => {
+                this.sendToPeer(connection, {
+                  type: 'error',
+                  error: 'Claude session startup timeout'
+                });
+                resolve();
+              }, 10000);
+            });
+          }
           
-          // 結果をリアルタイムでストリーミング
+          if (!session.isReady) {
+            this.sendToPeer(connection, {
+              type: 'error',
+              error: 'Claude session is not ready'
+            });
+            break;
+          }
+          
+          // リアルタイム出力のハンドラーを設定
+          session.onOutput = (data: string) => {
+            this.sendToPeer(connection, {
+              type: 'output',
+              data: data
+            });
+          };
+          
+          session.onError = (error: string) => {
+            this.sendToPeer(connection, {
+              type: 'error',
+              error: error
+            });
+          };
+          
+          // コマンドを送信
+          const result = await this.claudeInteractiveService.sendCommand(sessionId, message.command);
+          
+          // 最終結果を送信
           if (result.output) {
             this.sendToPeer(connection, {
               type: 'output',
-              data: result.output
+              data: result.output + '\r\n'
             });
           }
           
@@ -311,6 +367,10 @@ export class WebRTCService {
       }
     }
     this.connections.clear();
+    
+    // インタラクティブセッションも破棄
+    this.claudeInteractiveService.destroy();
+    
     logger.info('WebRTC service destroyed');
   }
 

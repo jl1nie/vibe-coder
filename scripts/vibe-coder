@@ -31,7 +31,7 @@ log_error() {
 usage() {
   echo "Vibe Coder Management Script"
   echo
-  echo "Usage: $0 {start|stop|logs|status|clean|dev|prod|setup}"
+  echo "Usage: $0 {start|stop|logs|status|clean|dev|prod|setup|host-id}"
   echo
   echo "Commands:"
   echo "  start   : Start Vibe Coder in production mode"
@@ -40,12 +40,13 @@ usage() {
   echo "  stop    : Stop all services"
   echo "  logs    : Follow the logs of the services"
   echo "  status  : Show service status and health"
+  echo "  host-id : Show or check the Host ID for connection"
   echo "  clean   : Stop services and remove containers/images"
   echo "  setup   : Setup environment and check configuration"
   echo
   echo "Environment Variables:"
   echo "  HOST_UID/HOST_GID - Auto-detected from current user"
-  echo "  SESSION_SECRET    - Required in .env file"
+  echo "  All configuration files are saved in current directory (.vibe-coder-*)"
 }
 
 # 環境設定
@@ -90,6 +91,47 @@ check_requirements() {
     log_success "Requirements check passed"
 }
 
+# Host ID表示機能
+show_host_id() {
+    log_info "Checking Host ID..."
+    
+    # Host IDファイルを確認
+    HOST_ID_FILE=".vibe-coder-host-id"
+    
+    if [[ -f "$HOST_ID_FILE" ]]; then
+        HOST_ID=$(cat "$HOST_ID_FILE" 2>/dev/null | tr -d '\n\r' | head -c 8)
+        if [[ "$HOST_ID" =~ ^[0-9]{8}$ ]]; then
+            echo
+            echo "╔════════════════════════════════════════╗"
+            echo "║              VIBE CODER                ║"
+            echo "║                                        ║"
+            echo "║          Host ID: $HOST_ID          ║"
+            echo "║                                        ║"
+            echo "║   スマホでhttps://vibe-coder.spaceを   ║"
+            echo "║   開いてこのIDを入力してください       ║"
+            echo "╚════════════════════════════════════════╝"
+            echo
+            log_success "Host ID: $HOST_ID (Ready for connection)"
+        else
+            log_warn "Invalid Host ID format in $HOST_ID_FILE"
+            log_info "Please restart Vibe Coder to generate a new Host ID"
+        fi
+    else
+        log_warn "Host ID file not found: $HOST_ID_FILE"
+        log_info "Start Vibe Coder first to generate a Host ID"
+        echo
+        echo "Run: ./scripts/vibe-coder start"
+    fi
+}
+
+# 起動後のHost ID表示
+show_startup_info() {
+    echo
+    log_success "Vibe Coder started successfully!"
+    echo
+    show_host_id
+}
+
 # --- Main Script ---
 
 # Check if a subcommand is provided
@@ -107,8 +149,11 @@ case "$1" in
     log_info "Starting Vibe Coder in production mode..."
     setup_env
     check_requirements
-    docker compose -f docker-compose.yml up --build -d
-    log_success "Vibe Coder started"
+    # Build once (no UID/GID needed at build time)
+    docker compose -f docker-compose.yml build
+    # Start with runtime UID/GID (passed via environment variables)
+    docker compose -f docker-compose.yml up -d
+    show_startup_info
     ;;
   dev)
     log_info "Starting Vibe Coder in development mode..."
@@ -116,7 +161,10 @@ case "$1" in
     check_requirements
     export ENABLE_SECURITY=false
     export LOG_LEVEL=debug
-    docker compose -f docker-compose.yml up --build
+    # Build once (no UID/GID needed at build time)
+    docker compose -f docker-compose.yml build
+    # Start with runtime UID/GID (passed via environment variables)
+    docker compose -f docker-compose.yml up
     ;;
   stop)
     log_info "Stopping Vibe Coder..."
@@ -137,6 +185,9 @@ case "$1" in
     else
         log_warn "Service is not responding"
     fi
+    ;;
+  host-id)
+    show_host_id
     ;;
   clean)
     log_info "Cleaning up environment..."
