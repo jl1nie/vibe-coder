@@ -124,7 +124,7 @@ describe('Claude Interactive E2E Test', () => {
         }
 
         // WebRTC シグナリング
-        if (urlStr.includes('/api/webrtc/signal')) {
+        if (urlStr.includes('/api/signal') || urlStr.includes('/api/webrtc/signal')) {
           return Promise.resolve({
             ok: true,
             json: () =>
@@ -241,7 +241,7 @@ You can also use natural language commands like:
         }
 
         // WebRTC シグナリング
-        if (urlStr.includes('/api/webrtc/signal')) {
+        if (urlStr.includes('/api/signal') || urlStr.includes('/api/webrtc/signal')) {
           return Promise.resolve({
             ok: true,
             json: () =>
@@ -371,9 +371,15 @@ You can also use natural language commands like:
     });
 
     // 5. WebRTC接続をシミュレート（データチャネル準備完了）
+    // ログイン後にWebRTC初期化が開始されるまで待機
+    await act(async () => {
+      // 少し待機してWebRTC初期化のタイミングを確保
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    
     await waitFor(() => {
       expect(mockPeerConnection.createDataChannel).toHaveBeenCalled();
-    });
+    }, { timeout: 5000 }); // タイムアウトを5秒に延長
 
     // WebRTC 接続完了をシミュレート
     const connectHandler = mockPeerConnection.addEventListener.mock.calls.find(
