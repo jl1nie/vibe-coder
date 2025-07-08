@@ -1,10 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Use process.env.PORT by default and fallback to 3000 if not specified.
-const PORT = process.env.PORT || 3000;
+// Use process.env.PORT by default and fallback to 5173 if not specified.
+const PORT = process.env.PORT || 5173;
 
 // Set web server command for local development.
-const serverCommand = process.env.CI ? 'npm run start' : 'npm run dev:pwa';
+const serverCommand = process.env.CI ? 'npm run start' : 'npm run dev';
 
 export default defineConfig({
   // Timeout per test
