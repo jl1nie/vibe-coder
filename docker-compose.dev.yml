@@ -24,7 +24,6 @@ services:
       - DEBUG=vibe-coder:*
     restart: unless-stopped
     command: ["npm", "run", "dev"]  # Use development command
-    user: "${HOST_UID}:${HOST_GID}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s

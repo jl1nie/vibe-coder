@@ -33,6 +33,15 @@ export function validateCommand(command: string): SecurityValidationResult {
     };
   }
 
+  // Allow Claude interactive commands (/help, /exit)
+  if (trimmedCommand.startsWith('/help') || trimmedCommand.startsWith('/exit')) {
+    return {
+      isValid: true,
+      sanitizedCommand: trimmedCommand,
+      reason: 'Claude interactive command allowed'
+    };
+  }
+
   // Check if command starts with an allowed command
   const commandStart = trimmedCommand.split(' ')[0];
   const isAllowed = SECURITY_CONFIG.allowedCommands.some(allowedCmd => 
@@ -46,9 +55,26 @@ export function validateCommand(command: string): SecurityValidationResult {
     };
   }
 
+  // Transform claude commands to non-interactive mode
+  let transformedCommand = trimmedCommand;
+  
+  // Convert 'claude-code' to 'claude --print' (claude-code is legacy name)
+  if (transformedCommand.startsWith('claude-code ')) {
+    transformedCommand = transformedCommand.replace('claude-code ', 'claude --print ');
+  }
+  // Convert 'claude' to 'claude --print' if it doesn't already have --print or special flags
+  else if (transformedCommand.startsWith('claude ') && 
+           !transformedCommand.includes('--print') && 
+           !transformedCommand.includes('--help') &&
+           !transformedCommand.includes('--version') &&
+           !transformedCommand.includes('config') &&
+           !transformedCommand.includes('auth')) {
+    transformedCommand = transformedCommand.replace('claude ', 'claude --print ');
+  }
+
   return {
     isValid: true,
-    sanitizedCommand: trimmedCommand,
+    sanitizedCommand: transformedCommand,
   };
 }
 

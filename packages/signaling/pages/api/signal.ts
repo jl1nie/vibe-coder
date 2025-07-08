@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { 
   SignalResponse, 
   WebRTCOffer, 
@@ -37,33 +37,33 @@ const cleanupExpiredSessions = () => {
   }
 };
 
-export default async function handler(req: NextRequest) {
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    return NextResponse.json(
-      { success: false, error: 'Method not allowed' },
-      { status: 405 }
-    );
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed'
+    });
   }
 
   try {
     cleanupExpiredSessions();
 
-    const body = await req.json();
+    const body = req.body;
     // 基本的な型チェック
     if (!body.type || !body.sessionId || !body.hostId) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request format' },
-        { status: 400 }
-      );
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request format'
+      });
     }
 
     // 許可されたtypeかチェック
     const validTypes = ['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate'];
     if (!validTypes.includes(body.type)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid request format' },
-        { status: 400 }
-      );
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request format'
+      });
     }
 
     const { type, sessionId, hostId, offer, answer, candidate } = body as SignalMessage;
@@ -72,10 +72,10 @@ export default async function handler(req: NextRequest) {
       case 'create-session': {
         // セッション作成
         if (!sessionId || !hostId) {
-          return NextResponse.json(
-            { success: false, error: 'sessionId and hostId are required' },
-            { status: 400 }
-          );
+          return res.status(400).json({
+            success: false,
+            error: 'sessionId and hostId are required'
+          });
         }
 
         const newSession: SessionData = {
@@ -95,16 +95,16 @@ export default async function handler(req: NextRequest) {
           message: 'Session created successfully'
         };
 
-        return NextResponse.json(createResponse);
+        return res.status(200).json(createResponse);
       }
 
       case 'offer': {
         // ホストからのOfferを保存
         if (!offer) {
-          return NextResponse.json(
-            { success: false, error: 'Offer data required' },
-            { status: 400 }
-          );
+          return res.status(400).json({
+            success: false,
+            error: 'Offer data required'
+          });
         }
 
         let session = sessions.get(sessionId);
@@ -131,24 +131,24 @@ export default async function handler(req: NextRequest) {
           message: 'Offer stored successfully'
         };
 
-        return NextResponse.json(response);
+        return res.status(200).json(response);
       }
 
       case 'answer': {
         // クライアントからのAnswerを保存
         if (!answer) {
-          return NextResponse.json(
-            { success: false, error: 'Answer data required' },
-            { status: 400 }
-          );
+          return res.status(400).json({
+            success: false,
+            error: 'Answer data required'
+          });
         }
 
         const session = sessions.get(sessionId);
         if (!session) {
-          return NextResponse.json(
-            { success: false, error: 'Session not found' },
-            { status: 404 }
-          );
+          return res.status(404).json({
+            success: false,
+            error: 'Session not found'
+          });
         }
 
         session.answer = answer;
@@ -161,23 +161,23 @@ export default async function handler(req: NextRequest) {
           message: 'Answer stored successfully'
         };
 
-        return NextResponse.json(answerResponse);
+        return res.status(200).json(answerResponse);
       }
 
       case 'candidate': {
         if (!candidate) {
-          return NextResponse.json(
-            { success: false, error: 'Candidate data required' },
-            { status: 400 }
-          );
+          return res.status(400).json({
+            success: false,
+            error: 'Candidate data required'
+          });
         }
 
         const session = sessions.get(sessionId);
         if (!session) {
-          return NextResponse.json(
-            { success: false, error: 'Session not found' },
-            { status: 404 }
-          );
+          return res.status(404).json({
+            success: false,
+            error: 'Session not found'
+          });
         }
 
         // ホストからの候補かクライアントからの候補かを判定
@@ -203,17 +203,17 @@ export default async function handler(req: NextRequest) {
           message: 'Candidate stored successfully'
         };
 
-        return NextResponse.json(candidateResponse);
+        return res.status(200).json(candidateResponse);
       }
 
       case 'get-offer': {
         // クライアントがOfferを取得
         const offerSession = sessions.get(sessionId);
         if (!offerSession || !offerSession.offer) {
-          return NextResponse.json(
-            { success: false, error: 'Offer not found' },
-            { status: 404 }
-          );
+          return res.status(404).json({
+            success: false,
+            error: 'Offer not found'
+          });
         }
 
         offerSession.lastActivity = Date.now();
@@ -223,17 +223,17 @@ export default async function handler(req: NextRequest) {
           offer: offerSession.offer
         };
 
-        return NextResponse.json(offerResponse);
+        return res.status(200).json(offerResponse);
       }
 
       case 'get-answer': {
         // ホストがAnswerを取得
         const answerSession = sessions.get(sessionId);
         if (!answerSession || !answerSession.answer) {
-          return NextResponse.json(
-            { success: false, error: 'Answer not found' },
-            { status: 404 }
-          );
+          return res.status(404).json({
+            success: false,
+            error: 'Answer not found'
+          });
         }
 
         answerSession.lastActivity = Date.now();
@@ -243,16 +243,16 @@ export default async function handler(req: NextRequest) {
           answer: answerSession.answer
         };
 
-        return NextResponse.json(getAnswerResponse);
+        return res.status(200).json(getAnswerResponse);
       }
 
       case 'get-candidate': {
         const candidateSession = sessions.get(sessionId);
         if (!candidateSession) {
-          return NextResponse.json(
-            { success: false, error: 'Session not found' },
-            { status: 404 }
-          );
+          return res.status(404).json({
+            success: false,
+            error: 'Session not found'
+          });
         }
 
         // リクエスト元に応じて適切な候補を返す
@@ -274,20 +274,20 @@ export default async function handler(req: NextRequest) {
           candidates: candidates
         };
 
-        return NextResponse.json(getCandidateResponse);
+        return res.status(200).json(getCandidateResponse);
       }
 
       default:
-        return NextResponse.json(
-          { success: false, error: 'Unknown signal type' },
-          { status: 400 }
-        );
+        return res.status(400).json({
+          success: false,
+          error: 'Unknown signal type'
+        });
     }
   } catch (error) {
     console.error('Signal handling error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
   }
 }

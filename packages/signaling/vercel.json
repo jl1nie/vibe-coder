@@ -1,15 +1,4 @@
 {
-  "functions": {
-    "api/signal.ts": {
-      "runtime": "@vercel/edge@2.0.0"
-    },
-    "api/session.ts": {
-      "runtime": "@vercel/edge@2.0.0"
-    },
-    "api/health.ts": {
-      "runtime": "@vercel/edge@2.0.0"
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",

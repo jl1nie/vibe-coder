@@ -1,32 +1,31 @@
-version: '3.8'
-
 services:
   vibe-coder-host:
     build:
       context: .
       dockerfile: packages/host/Dockerfile
-      args:
-        HOST_UID: ${HOST_UID:-1001}
-        HOST_GID: ${HOST_GID:-1001}
     container_name: vibe-coder-host
     ports:
       - "8080:8080"
     volumes:
-      - ./workspace:/app/workspace
+      # Claude Code設定をマウント
       - ~/.claude:/app/.claude
+      # 現在の作業ディレクトリをマウント（vibe-coderファイルの永続化用）
+      - .:/app/workspace
     environment:
       - NODE_ENV=production
-      - SIGNALING_SERVER_URL=${SIGNALING_SERVER_URL:-https://vibe-coder.space/api/signal}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - MAX_CONCURRENT_SESSIONS=${MAX_CONCURRENT_SESSIONS:-10}
-      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-30000}
-      - ENABLE_SECURITY=${ENABLE_SECURITY:-true}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - DEBUG=${DEBUG:-}
+      - CLAUDE_CONFIG_PATH=/app/.claude
+      - HOST_UID=${HOST_UID}
+      - HOST_GID=${HOST_GID}
+      # インタラクティブモードを有効化
+      - TERM=xterm-256color
+      - COLUMNS=120
+      - LINES=30
+    working_dir: /app
+    command: ["node", "packages/host/dist/host/src/index.js"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s

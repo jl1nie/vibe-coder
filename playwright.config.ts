@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Use process.env.PORT by default and fallback to 3000 if not specified.
-const PORT = process.env.PORT || 3000;
+// Use process.env.PORT by default and fallback to 5173 if not specified.
+const PORT = process.env.PORT || 5173;
 
 // Set web server command for local development.
 const serverCommand = process.env.CI ? 'npm run start' : 'npm run dev';
@@ -17,15 +17,17 @@ export default defineConfig({
   outputDir: 'test-results/',
 
   // Reporter to use
-  reporter: 'html',
+  reporter: [['list'], ['html']],
 
   // Run your local dev server before starting the tests:
   // https://playwright.dev/docs/test-advanced#launching-a-development-web-server
   webServer: {
     command: serverCommand,
     url: `http://localhost:${PORT}`,
-    timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    timeout: 60 * 1000,
+    reuseExistingServer: true,
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 
   use: {

@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
+import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
+import { FitAddon } from '@xterm/addon-fit';
+import { Terminal } from '@xterm/xterm';
 import {
-  Mic,
-  Settings,
+  ArrowDown,
+  ArrowUp,
   ChevronLeft,
   ChevronRight,
+  CornerDownLeft,
+  LogOut,
+  Mic,
+  Settings,
   Wifi,
   WifiOff,
-  ArrowUp,
-  ArrowDown,
-  CornerDownLeft,
-  LogOut
 } from 'lucide-react';
-import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
-import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import QRCode from 'qrcode';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 // Web Speech API type declarations
 declare global {
@@ -34,8 +34,12 @@ interface SpeechRecognition extends EventTarget {
   stop(): void;
   abort(): void;
   onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onresult:
+    | ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any)
+    | null;
+  onerror:
+    | ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any)
+    | null;
   onend: ((this: SpeechRecognition, ev: Event) => any) | null;
 }
 
@@ -68,11 +72,20 @@ interface SpeechRecognitionAlternative {
 
 declare const SpeechRecognition: {
   prototype: SpeechRecognition;
-  new(): SpeechRecognition;
+  new (): SpeechRecognition;
 };
 
-type ExecutionStatus = 'idle' | 'running' | 'awaitingInput' | 'cancelled' | 'completed';
-type AuthStatus = 'unauthenticated' | 'entering_host_id' | 'entering_totp' | 'authenticated';
+type ExecutionStatus =
+  | 'idle'
+  | 'running'
+  | 'awaitingInput'
+  | 'cancelled'
+  | 'completed';
+type AuthStatus =
+  | 'unauthenticated'
+  | 'entering_host_id'
+  | 'entering_totp'
+  | 'authenticated';
 
 interface AuthState {
   status: AuthStatus;
@@ -179,19 +192,17 @@ const App: React.FC = () => {
 
   // WebRTC Connection Management
   const initWebRTCConnection = () => {
-    const SIGNALING_SERVER_URL = 'http://localhost:8080';
+    const SIGNALING_SERVER_URL = 'http://localhost:5174';
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
     let sessionId: string | null = null;
 
     const createPeerConnection = async () => {
       pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-        ],
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
 
-      pc.onicecandidate = (event) => {
+      pc.onicecandidate = event => {
         if (event.candidate) {
           // Send ICE candidate to signaling server
           console.log('Sending ICE candidate:', event.candidate);
@@ -201,11 +212,13 @@ const App: React.FC = () => {
             hostId: 'vibe-coder-host',
             candidate: event.candidate.toJSON(),
           };
-          fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
+          fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(signalMessage),
-          }).catch(error => console.error('Failed to send ICE candidate:', error));
+          }).catch(error =>
+            console.error('Failed to send ICE candidate:', error)
+          );
         }
       };
 
@@ -213,20 +226,22 @@ const App: React.FC = () => {
         console.log('ICE connection state:', pc?.iceConnectionState);
         setState(prev => ({
           ...prev,
-          connectionStatus: { isConnected: pc?.iceConnectionState === 'connected' },
+          connectionStatus: {
+            isConnected: pc?.iceConnectionState === 'connected',
+          },
         }));
       };
 
-      pc.ondatachannel = (event) => {
+      pc.ondatachannel = event => {
         dc = event.channel;
         console.log('Data channel created:', dc);
         setState(prev => ({ ...prev, dataChannel: dc }));
 
-        dc.onmessage = (event) => {
+        dc.onmessage = event => {
           console.log('Data channel message:', event.data);
           try {
             const message = JSON.parse(event.data);
-            
+
             if (xtermRef.current) {
               switch (message.type) {
                 case 'output':
@@ -240,10 +255,10 @@ const App: React.FC = () => {
                   setState(prev => ({ ...prev, executionStatus: 'idle' }));
                   break;
                 case 'prompt':
-                  setState(prev => ({ 
-                    ...prev, 
+                  setState(prev => ({
+                    ...prev,
                     executionStatus: 'awaitingInput',
-                    promptMessage: message.message 
+                    promptMessage: message.message,
                   }));
                   break;
                 default:
@@ -269,19 +284,23 @@ const App: React.FC = () => {
         dc.onclose = () => {
           console.log('Data channel closed');
           if (xtermRef.current) {
-            xtermRef.current.write('\r\n⚠️ WebRTC Data Channel disconnected. Connection lost.\r\n');
+            xtermRef.current.write(
+              '\r\n⚠️ WebRTC Data Channel disconnected. Connection lost.\r\n'
+            );
           }
-          setState(prev => ({ 
-            ...prev, 
+          setState(prev => ({
+            ...prev,
             dataChannel: null,
-            connectionStatus: { isConnected: false }
+            connectionStatus: { isConnected: false },
           }));
         };
 
-        dc.onerror = (error) => {
+        dc.onerror = error => {
           console.error('Data channel error:', error);
           if (xtermRef.current) {
-            xtermRef.current.write(`\r\nData Channel Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
+            xtermRef.current.write(
+              `\r\nData Channel Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`
+            );
           }
         };
       };
@@ -306,12 +325,15 @@ const App: React.FC = () => {
           sessionId: sessionId || '',
           hostId: 'vibe-coder-host',
         };
-        
-        const sessionResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createSessionMessage),
-        });
+
+        const sessionResponse = await fetch(
+          `${SIGNALING_SERVER_URL}/api/signal`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(createSessionMessage),
+          }
+        );
         const sessionData = await sessionResponse.json();
         if (!sessionData.success) {
           throw new Error(`Failed to create session: ${sessionData.error}`);
@@ -328,14 +350,17 @@ const App: React.FC = () => {
           type: 'offer',
           sessionId: sessionId || '',
           hostId: 'vibe-coder-host',
-          offer: { type: offer?.type as "offer", sdp: offer?.sdp || '' },
+          offer: { type: offer?.type as 'offer', sdp: offer?.sdp || '' },
         };
 
-        const signalResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(signalMessage),
-        });
+        const signalResponse = await fetch(
+          `${SIGNALING_SERVER_URL}/api/signal`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(signalMessage),
+          }
+        );
         const signalData = await signalResponse.json();
         if (!signalData.success) {
           throw new Error(`Failed to send offer: ${signalData.error}`);
@@ -344,21 +369,24 @@ const App: React.FC = () => {
 
         // Poll for answer and ICE candidates from signaling server
         let answerReceived = false;
-        
+
         const pollForAnswer = async () => {
           if (answerReceived) return;
-          
+
           const getAnswerMessage: SignalMessage = {
             type: 'get-answer',
             sessionId: sessionId || '',
             hostId: 'vibe-coder-host',
           };
-          
-          const answerResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(getAnswerMessage),
-          });
+
+          const answerResponse = await fetch(
+            `${SIGNALING_SERVER_URL}/api/signal`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(getAnswerMessage),
+            }
+          );
           const answerData = await answerResponse.json();
 
           if (answerData.success && answerData.answer) {
@@ -380,17 +408,26 @@ const App: React.FC = () => {
             sessionId: sessionId || '',
             hostId: 'vibe-coder-host',
           };
-          
+
           try {
-            const candidatesResponse = await fetch(`${SIGNALING_SERVER_URL}/api/webrtc/signal`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(getCandidatesMessage),
-            });
+            const candidatesResponse = await fetch(
+              `${SIGNALING_SERVER_URL}/api/signal`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(getCandidatesMessage),
+              }
+            );
             const candidatesData = await candidatesResponse.json();
 
-            if (candidatesData.success && candidatesData.candidates?.length > 0) {
-              console.log('Received ICE candidates:', candidatesData.candidates);
+            if (
+              candidatesData.success &&
+              candidatesData.candidates?.length > 0
+            ) {
+              console.log(
+                'Received ICE candidates:',
+                candidatesData.candidates
+              );
               for (const candidateData of candidatesData.candidates) {
                 try {
                   const candidate = JSON.parse(candidateData.candidate);
@@ -403,20 +440,24 @@ const App: React.FC = () => {
           } catch (error) {
             console.error('Failed to fetch ICE candidates:', error);
           }
-          
+
           // Continue polling for more candidates
           setTimeout(pollForCandidates, 2000);
         };
 
         pollForAnswer();
         pollForCandidates();
-
       } catch (error: any) {
         console.error('WebRTC initialization error:', error);
         if (xtermRef.current) {
-          xtermRef.current.write(`\r\nWebRTC Init Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
+          xtermRef.current.write(
+            `\r\nWebRTC Init Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`
+          );
         }
-        setState(prev => ({ ...prev, connectionStatus: { isConnected: false } }));
+        setState(prev => ({
+          ...prev,
+          connectionStatus: { isConnected: false },
+        }));
       }
     };
 
@@ -435,18 +476,21 @@ const App: React.FC = () => {
   // Auto-initialize WebRTC connection after authentication
   useEffect(() => {
     if (state.auth.status === 'authenticated' && !state.peerConnection) {
-      console.log('Authentication successful, initializing WebRTC connection...');
+      console.log(
+        'Authentication successful, initializing WebRTC connection...'
+      );
       initWebRTCConnection();
     }
   }, [state.auth.status, state.peerConnection]);
 
   // Check voice recognition support and initialize
   useEffect(() => {
-    const SpeechRecognitionAPI = window.webkitSpeechRecognition || window.SpeechRecognition;
+    const SpeechRecognitionAPI =
+      window.webkitSpeechRecognition || window.SpeechRecognition;
     const supported = !!SpeechRecognitionAPI;
-    
+
     setState(prev => ({ ...prev, voiceSupported: supported }));
-    
+
     if (supported) {
       const recognition = new SpeechRecognitionAPI();
       recognition.continuous = false;
@@ -462,23 +506,23 @@ const App: React.FC = () => {
         }
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = event => {
         const transcript = event.results[0][0].transcript;
         console.log('Voice recognition result:', transcript);
-        
+
         if (xtermRef.current) {
           xtermRef.current.write(`🗣️ "${transcript}"\r\n`);
         }
-        
+
         // Execute the voice command automatically
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           textInput: transcript,
-          voiceCommandPending: true 
+          voiceCommandPending: true,
         }));
       };
 
-      recognition.onerror = (event) => {
+      recognition.onerror = event => {
         console.error('Voice recognition error:', event.error);
         setState(prev => ({ ...prev, isRecording: false }));
         if (xtermRef.current) {
@@ -501,91 +545,107 @@ const App: React.FC = () => {
     };
   }, [state.auth.jwt]);
 
-  const executeCommand = useCallback(async (command: string) => {
-    if (!state.auth.jwt) {
-      if (xtermRef.current) {
-        xtermRef.current.write('\r\nError: Not authenticated. Please login first.\r\n');
-      }
-      return;
-    }
-
-    if (xtermRef.current) {
-      xtermRef.current.write(`user@localhost:~/project$ claude-code "${command}"\r\n`);
-      xtermRef.current.write('🤖 Executing command...\r\n');
-    }
-    
-    setState(prev => ({
-      ...prev,
-      executionStatus: 'running',
-    }));
-
-    try {
-      // Execute command via REST API (fallback) or WebRTC (if available)
-      if (state.dataChannel && state.dataChannel.readyState === 'open') {
-        // Use WebRTC data channel for real-time communication
-        state.dataChannel.send(JSON.stringify({ 
-          type: 'claude-command', 
-          command,
-          timestamp: Date.now()
-        }));
-      } else {
-        // Use REST API as fallback
-        const response = await fetch('http://localhost:8080/api/claude/execute', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.auth.jwt}`
-          },
-          body: JSON.stringify({ command })
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Session expired - redirect to 2FA
-            setState(prev => ({
-              ...prev,
-              auth: {
-                ...prev.auth,
-                status: 'entering_totp',
-                jwt: null,
-                error: 'セッションが期限切れです。再度認証してください。',
-                totpInput: '', // Clear TOTP input
-              },
-              connectionStatus: { isConnected: false },
-              peerConnection: null,
-              dataChannel: null,
-              executionStatus: 'idle',
-            }));
-            if (xtermRef.current) {
-              xtermRef.current.write('\r\n⚠️ Session expired. Please re-authenticate.\r\n');
-            }
-            return;
-          }
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        
+  const executeCommand = useCallback(
+    async (command: string) => {
+      if (!state.auth.jwt) {
         if (xtermRef.current) {
-          if (result.output) {
-            xtermRef.current.write(result.output + '\r\n');
+          xtermRef.current.write(
+            '\r\nError: Not authenticated. Please login first.\r\n'
+          );
+        }
+        return;
+      }
+
+      if (xtermRef.current) {
+        xtermRef.current.write(
+          `user@localhost:~/project$ claude-code "${command}"\r\n`
+        );
+        xtermRef.current.write('🤖 Executing command...\r\n');
+      }
+
+      setState(prev => ({
+        ...prev,
+        executionStatus: 'running',
+      }));
+
+      try {
+        // Execute command via REST API (fallback) or WebRTC (if available)
+        if (state.dataChannel && state.dataChannel.readyState === 'open') {
+          // Use WebRTC data channel for real-time communication
+          state.dataChannel.send(
+            JSON.stringify({
+              type: 'claude-command',
+              command,
+              timestamp: Date.now(),
+            })
+          );
+        } else {
+          // Use REST API as fallback
+          const response = await fetch(
+            'http://localhost:8080/api/claude/execute',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${state.auth.jwt}`,
+              },
+              body: JSON.stringify({ command }),
+            }
+          );
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              // Session expired - redirect to 2FA
+              setState(prev => ({
+                ...prev,
+                auth: {
+                  ...prev.auth,
+                  status: 'entering_totp',
+                  jwt: null,
+                  error: 'セッションが期限切れです。再度認証してください。',
+                  totpInput: '', // Clear TOTP input
+                },
+                connectionStatus: { isConnected: false },
+                peerConnection: null,
+                dataChannel: null,
+                executionStatus: 'idle',
+              }));
+              if (xtermRef.current) {
+                xtermRef.current.write(
+                  '\r\n⚠️ Session expired. Please re-authenticate.\r\n'
+                );
+              }
+              return;
+            }
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-          if (result.error) {
-            xtermRef.current.write(`Error: ${result.error}\r\n`);
+
+          const result = await response.json();
+
+          if (xtermRef.current) {
+            if (result.output) {
+              xtermRef.current.write(result.output + '\r\n');
+            }
+            if (result.error) {
+              xtermRef.current.write(`Error: ${result.error}\r\n`);
+            }
+            xtermRef.current.write('user@localhost:~/project$ ');
           }
+
+          setState(prev => ({ ...prev, executionStatus: 'idle' }));
+        }
+      } catch (error) {
+        if (xtermRef.current) {
+          xtermRef.current.write(
+            `\r\nError: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`
+          );
           xtermRef.current.write('user@localhost:~/project$ ');
         }
-
         setState(prev => ({ ...prev, executionStatus: 'idle' }));
       }
-    } catch (error) {
-      if (xtermRef.current) {
-        xtermRef.current.write(`\r\nError: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
-        xtermRef.current.write('user@localhost:~/project$ ');
-      }
-      setState(prev => ({ ...prev, executionStatus: 'idle' }));
-    }
-  }, [state.auth.jwt, state.dataChannel]);
+    },
+    [state.auth.jwt, state.dataChannel]
+  );
 
   const handlePromptResponse = async (response: string) => {
     if (xtermRef.current) {
@@ -606,10 +666,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (state.voiceCommandPending && state.textInput.trim()) {
       executeCommand(state.textInput);
-      setState(prev => ({ 
-        ...prev, 
+      setState(prev => ({
+        ...prev,
         voiceCommandPending: false,
-        textInput: ''
+        textInput: '',
       }));
     }
   }, [state.voiceCommandPending, state.textInput, executeCommand]);
@@ -634,40 +694,42 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
-  
+
   // Authentication functions
   const handleHostIdSubmit = async () => {
     if (!state.auth.hostId.trim() || state.auth.hostId.length !== 8) {
-      setState(prev => ({ 
-        ...prev, 
-        auth: { ...prev.auth, error: '8桁のHost IDを入力してください' }
+      setState(prev => ({
+        ...prev,
+        auth: { ...prev.auth, error: '8桁のHost IDを入力してください' },
       }));
       return;
     }
 
     try {
-      setState(prev => ({ 
-        ...prev, 
-        auth: { ...prev.auth, error: null }
+      setState(prev => ({
+        ...prev,
+        auth: { ...prev.auth, error: null },
       }));
-      
+
       // Create session with host server
       const response = await fetch('http://localhost:8080/api/auth/sessions', {
         method: 'POST',
       });
-      
+
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+          throw new Error(
+            'Host IDが見つかりません。正しい8桁の数字を入力してください'
+          );
         } else if (response.status === 500) {
           throw new Error('ホストサーバーに接続できません');
         } else {
           throw new Error('接続エラーが発生しました');
         }
       }
-      
+
       const data = await response.json();
-      
+
       // Generate QR Code for TOTP
       const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${data.totpSecret}&issuer=Vibe%20Coder`;
       const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
@@ -675,55 +737,65 @@ const App: React.FC = () => {
         margin: 2,
         color: {
           dark: '#000000',
-          light: '#ffffff'
-        }
+          light: '#ffffff',
+        },
       });
-      
-      setState(prev => ({ 
-        ...prev, 
-        auth: { 
-          ...prev.auth, 
+
+      setState(prev => ({
+        ...prev,
+        auth: {
+          ...prev.auth,
           status: 'entering_totp',
           sessionId: data.sessionId,
           totpSecret: data.totpSecret,
           qrCodeUrl: qrCodeDataUrl,
           totpInput: '', // Clear TOTP input
-        }
+        },
       }));
-
     } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        auth: { ...prev.auth, error: error instanceof Error ? error.message : '接続エラー' }
+      setState(prev => ({
+        ...prev,
+        auth: {
+          ...prev.auth,
+          error: error instanceof Error ? error.message : '接続エラー',
+        },
       }));
     }
   };
 
   const handleTotpSubmit = async (totpCode: string) => {
     try {
-      setState(prev => ({ 
-        ...prev, 
-        auth: { ...prev.auth, error: null }
+      console.log('handleTotpSubmit called with:', totpCode);
+      setState(prev => ({
+        ...prev,
+        auth: { ...prev.auth, error: null },
       }));
 
       // If no sessionId, create a new session first
       if (!state.auth.sessionId) {
-        const sessionResponse = await fetch('http://localhost:8080/api/auth/sessions', {
-          method: 'POST',
-        });
-        
+        console.log('No sessionId, creating new session...');
+        const sessionResponse = await fetch(
+          'http://localhost:8080/api/auth/sessions',
+          {
+            method: 'POST',
+          }
+        );
+
         if (!sessionResponse.ok) {
           if (sessionResponse.status === 404) {
-            throw new Error('Host IDが見つかりません。正しい8桁の数字を入力してください');
+            throw new Error(
+              'Host IDが見つかりません。正しい8桁の数字を入力してください'
+            );
           } else if (sessionResponse.status === 500) {
             throw new Error('ホストサーバーに接続できません');
           } else {
             throw new Error('接続エラーが発生しました');
           }
         }
-        
+
         const sessionData = await sessionResponse.json();
-        
+        console.log('Session created:', sessionData);
+
         // Generate QR Code for TOTP
         const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${sessionData.totpSecret}&issuer=Vibe%20Coder`;
         const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
@@ -731,73 +803,79 @@ const App: React.FC = () => {
           margin: 2,
           color: {
             dark: '#000000',
-            light: '#ffffff'
-          }
+            light: '#ffffff',
+          },
         });
-        
-        setState(prev => ({ 
-          ...prev, 
-          auth: { 
-            ...prev.auth, 
+
+        setState(prev => ({
+          ...prev,
+          auth: {
+            ...prev.auth,
             sessionId: sessionData.sessionId,
             totpSecret: sessionData.totpSecret,
             qrCodeUrl: qrCodeDataUrl,
-          }
+          },
         }));
       }
 
-      const response = await fetch(`http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`, {
+      const verifyUrl = `http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`;
+      console.log('Calling TOTP verification API:', verifyUrl);
+      const response = await fetch(verifyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ totpCode }),
       });
 
+      console.log('TOTP verification response status:', response.status);
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error('認証コードが正しくありません');
         } else if (response.status === 404) {
           // Session expired, need to create new session
-          setState(prev => ({ 
-            ...prev, 
-            auth: { 
-              ...prev.auth, 
+          setState(prev => ({
+            ...prev,
+            auth: {
+              ...prev.auth,
               sessionId: null,
               totpSecret: null,
               qrCodeUrl: null,
               totpInput: '', // Clear TOTP input
-            }
+            },
           }));
-          throw new Error('セッションが期限切れです。もう一度認証コードを入力してください');
+          throw new Error(
+            'セッションが期限切れです。もう一度認証コードを入力してください'
+          );
         } else {
           throw new Error('サーバーエラーが発生しました');
         }
       }
 
       const data = await response.json();
-      
+      console.log('TOTP verification response data:', data);
+
       if (data.success) {
-        setState(prev => ({ 
-          ...prev, 
-          auth: { 
-            ...prev.auth, 
+        setState(prev => ({
+          ...prev,
+          auth: {
+            ...prev.auth,
             status: 'authenticated',
             jwt: data.token,
-          }
+          },
         }));
-        
+
         // WebRTC connection will be started automatically after authentication
       } else {
         throw new Error(data.message || '認証に失敗しました');
       }
-
     } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        auth: { 
-          ...prev.auth, 
+      console.error('handleTotpSubmit error:', error);
+      setState(prev => ({
+        ...prev,
+        auth: {
+          ...prev.auth,
           error: error instanceof Error ? error.message : '認証エラー',
           totpInput: '', // Clear TOTP input on error
-        }
+        },
       }));
     }
   };
@@ -826,7 +904,9 @@ const App: React.FC = () => {
       } catch (error) {
         console.error('Failed to start voice recognition:', error);
         if (xtermRef.current) {
-          xtermRef.current.write(`\r\n❌ Voice recognition failed to start\r\n`);
+          xtermRef.current.write(
+            `\r\n❌ Voice recognition failed to start\r\n`
+          );
         }
       }
     }
@@ -861,23 +941,39 @@ const App: React.FC = () => {
     // Clear terminal
     if (xtermRef.current) {
       xtermRef.current.clear();
-      xtermRef.current.write('Logged out. Please enter 2FA code to reconnect.\r\n');
+      xtermRef.current.write(
+        'Logged out. Please enter 2FA code to reconnect.\r\n'
+      );
     }
   };
-  
+
   const scrollCommands = (direction: 'left' | 'right') => {
     const currentCommands = DEFAULT_PLAYLIST.commands;
     if (direction === 'left') {
-      setState(prev => ({ ...prev, currentCommandIndex: Math.max(0, prev.currentCommandIndex - 1) }));
+      setState(prev => ({
+        ...prev,
+        currentCommandIndex: Math.max(0, prev.currentCommandIndex - 1),
+      }));
     } else {
-      setState(prev => ({ ...prev, currentCommandIndex: Math.min(currentCommands.length - 5, prev.currentCommandIndex + 1) }));
+      setState(prev => ({
+        ...prev,
+        currentCommandIndex: Math.min(
+          currentCommands.length - 5,
+          prev.currentCommandIndex + 1
+        ),
+      }));
     }
   };
-  
+
   const currentCommands = DEFAULT_PLAYLIST.commands;
-  const visibleCommands = currentCommands.slice(state.currentCommandIndex, state.currentCommandIndex + 5);
-  const isExecuting = state.executionStatus === 'running' || state.executionStatus === 'awaitingInput';
-  
+  const visibleCommands = currentCommands.slice(
+    state.currentCommandIndex,
+    state.currentCommandIndex + 5
+  );
+  const isExecuting =
+    state.executionStatus === 'running' ||
+    state.executionStatus === 'awaitingInput';
+
   // Render authentication screens
   const renderAuthScreen = () => {
     if (state.auth.status === 'entering_host_id') {
@@ -886,36 +982,45 @@ const App: React.FC = () => {
           <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">ホスト接続</h2>
-              <p className="text-sm opacity-80">8桁のHost IDを入力してください</p>
+              <p className="text-sm opacity-80">
+                8桁のHost IDを入力してください
+              </p>
             </div>
-            
+
             <div className="space-y-4">
               <input
                 type="text"
                 value={state.auth.hostId}
-                onChange={(e) => setState(prev => ({ 
-                  ...prev, 
-                  auth: { ...prev.auth, hostId: e.target.value.replace(/\D/g, '').slice(0, 8) }
-                }))}
-                onKeyDown={(e) => e.key === 'Enter' && handleHostIdSubmit()}
+                onChange={e =>
+                  setState(prev => ({
+                    ...prev,
+                    auth: {
+                      ...prev.auth,
+                      hostId: e.target.value.replace(/\D/g, '').slice(0, 8),
+                    },
+                  }))
+                }
+                onKeyDown={e => e.key === 'Enter' && handleHostIdSubmit()}
                 className="w-full p-4 bg-white/10 rounded-lg text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
                 placeholder="12345678"
                 maxLength={8}
                 autoFocus
               />
-              
+
               {state.auth.error && (
                 <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
                     <span className="text-red-400 text-lg">❌</span>
-                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                    <p className="text-red-400 text-sm font-medium">
+                      {state.auth.error}
+                    </p>
                   </div>
                   <p className="text-red-300 text-xs mt-1 opacity-80">
                     ホストサーバーが起動していることを確認してください。
                   </p>
                 </div>
               )}
-              
+
               <button
                 onClick={handleHostIdSubmit}
                 disabled={state.auth.hostId.length !== 8}
@@ -935,13 +1040,15 @@ const App: React.FC = () => {
           <div className="glass-morphism rounded-xl p-6 w-full max-w-md">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">2FA認証</h2>
-              <p className="text-sm opacity-80 mb-4">QRコードをAuthenticatorアプリでスキャンしてください</p>
-              
+              <p className="text-sm opacity-80 mb-4">
+                QRコードをAuthenticatorアプリでスキャンしてください
+              </p>
+
               {state.auth.qrCodeUrl && (
                 <div className="bg-white/10 rounded-lg p-4 mb-4 flex flex-col items-center">
-                  <img 
-                    src={state.auth.qrCodeUrl} 
-                    alt="TOTP QR Code" 
+                  <img
+                    src={state.auth.qrCodeUrl}
+                    alt="TOTP QR Code"
                     className="w-48 h-48 mb-3"
                   />
                   <p className="text-xs opacity-70 mb-2">手動入力用秘密鍵:</p>
@@ -951,16 +1058,16 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="space-y-4">
               <input
                 type="text"
                 value={state.auth.totpInput}
-                onChange={(e) => {
+                onChange={e => {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setState(prev => ({
                     ...prev,
-                    auth: { ...prev.auth, totpInput: code }
+                    auth: { ...prev.auth, totpInput: code },
                   }));
                   if (code.length === 6) {
                     handleTotpSubmit(code);
@@ -971,32 +1078,36 @@ const App: React.FC = () => {
                 maxLength={6}
                 autoFocus
               />
-              
+
               {state.auth.error && (
                 <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
                   <div className="flex items-center space-x-2">
                     <span className="text-red-400 text-lg">❌</span>
-                    <p className="text-red-400 text-sm font-medium">{state.auth.error}</p>
+                    <p className="text-red-400 text-sm font-medium">
+                      {state.auth.error}
+                    </p>
                   </div>
                   <p className="text-red-300 text-xs mt-1 opacity-80">
                     認証コードを確認してください。時間切れの場合は新しいコードを入力してください。
                   </p>
                 </div>
               )}
-              
+
               <button
-                onClick={() => setState(prev => ({ 
-                  ...prev, 
-                  auth: { 
-                    ...prev.auth, 
-                    status: 'entering_host_id', 
-                    error: null,
-                    totpSecret: null,
-                    qrCodeUrl: null,
-                    sessionId: null,
-                    totpInput: '', // Clear TOTP input
-                  }
-                }))}
+                onClick={() =>
+                  setState(prev => ({
+                    ...prev,
+                    auth: {
+                      ...prev.auth,
+                      status: 'entering_host_id',
+                      error: null,
+                      totpSecret: null,
+                      qrCodeUrl: null,
+                      sessionId: null,
+                      totpInput: '', // Clear TOTP input
+                    },
+                  }))
+                }
                 className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
               >
                 戻る
@@ -1013,14 +1124,18 @@ const App: React.FC = () => {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">Vibe Coder</h2>
           <p className="text-lg opacity-80 mb-2">スマホでClaude Codeを実行</p>
-          <p className="text-sm opacity-60">まずはホストサーバーに接続してください</p>
+          <p className="text-sm opacity-60">
+            まずはホストサーバーに接続してください
+          </p>
         </div>
-        
+
         <button
-          onClick={() => setState(prev => ({ 
-            ...prev, 
-            auth: { ...prev.auth, status: 'entering_host_id' }
-          }))}
+          onClick={() =>
+            setState(prev => ({
+              ...prev,
+              auth: { ...prev.auth, status: 'entering_host_id' },
+            }))
+          }
           className="glass-morphism rounded-xl p-6 hover:bg-white/20 transition-all touch-friendly"
         >
           <div className="text-center">
@@ -1032,7 +1147,7 @@ const App: React.FC = () => {
       </div>
     );
   };
-  
+
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 to-slate-700 text-white flex flex-col relative overflow-hidden mobile-optimized full-height-mobile">
       {/* Header */}
@@ -1044,27 +1159,36 @@ const App: React.FC = () => {
             <p className="text-xs opacity-80">Claude Code Mobile</p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1">
             {state.connectionStatus.isConnected ? (
               <Wifi className="w-4 h-4 text-green-400" data-testid="wifi-on" />
             ) : (
-              <WifiOff className="w-4 h-4 text-red-400" data-testid="wifi-off" />
+              <WifiOff
+                className="w-4 h-4 text-red-400"
+                data-testid="wifi-off"
+              />
             )}
           </div>
-          
-          <button 
+
+          <button
             onClick={handleVoiceToggle}
             className={`touch-friendly rounded-full backdrop-blur-sm transition-all ${state.isRecording ? 'bg-red-500 pulse-recording' : 'glass-morphism hover:bg-white/20'} ${!state.voiceSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
-            title={state.voiceSupported ? (state.isRecording ? 'Stop recording' : 'Start voice input') : 'Voice input not supported'}
+            title={
+              state.voiceSupported
+                ? state.isRecording
+                  ? 'Stop recording'
+                  : 'Start voice input'
+                : 'Voice input not supported'
+            }
             disabled={!state.voiceSupported}
           >
             <Mic className="w-4 h-4" />
           </button>
-          
+
           {state.auth.status === 'authenticated' && (
-            <button 
+            <button
               onClick={handleLogout}
               className="touch-friendly glass-morphism rounded-full hover:bg-white/20"
               title="Logout"
@@ -1072,8 +1196,8 @@ const App: React.FC = () => {
               <LogOut className="w-4 h-4" />
             </button>
           )}
-          
-          <button 
+
+          <button
             onClick={() => setState(prev => ({ ...prev, showSettings: true }))}
             className="touch-friendly glass-morphism rounded-full hover:bg-white/20"
             title="Settings"
@@ -1090,122 +1214,135 @@ const App: React.FC = () => {
         <>
           {/* Terminal Section */}
           <div className="relative z-10 p-3 flex flex-col min-h-0 flex-1">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium flex items-center">
-            Terminal
-          </span>
-          <span className="text-xs opacity-70">
-            {state.executionStatus === 'running' && 'Running...'}
-            {state.executionStatus === 'awaitingInput' && 'Awaiting input...'}
-            {state.executionStatus === 'idle' && 'Ready'}
-            {state.executionStatus === 'completed' && 'Ready'}
-            {state.executionStatus === 'cancelled' && 'Ready'}
-          </span>
-        </div>
-        
-        <div 
-          ref={terminalRef}
-          className="glass-morphism rounded-lg p-3 flex-1 overflow-y-auto terminal-output cursor-pointer hover:border-gray-600 transition-colors custom-scrollbar min-h-0"
-        >
-          {/* xterm.js will render here */}
-        </div>
-      </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium flex items-center">
+                Terminal
+              </span>
+              <span className="text-xs opacity-70">
+                {state.executionStatus === 'running' && 'Running...'}
+                {state.executionStatus === 'awaitingInput' &&
+                  'Awaiting input...'}
+                {state.executionStatus === 'idle' && 'Ready'}
+                {state.executionStatus === 'completed' && 'Ready'}
+                {state.executionStatus === 'cancelled' && 'Ready'}
+              </span>
+            </div>
 
-      {/* Text Input Area */}
-      <div className={`relative z-10 px-3 py-2 glass-morphism border-t border-white/10 flex-shrink-0 ${isExecuting ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="flex items-center">
-          <input
-            type="text"
-            value={state.textInput}
-            onChange={(e) => setState(prev => ({ ...prev, textInput: e.target.value }))}
-            onKeyDown={(e) => e.key === 'Enter' && handleTextSubmit()}
-            className="flex-1 bg-transparent text-white outline-none"
-            disabled={isExecuting}
-          />
-          <button
-            onClick={handleTextSubmit}
-            className="ml-2 touch-friendly glass-morphism rounded-full hover:bg-white/20"
-            title="Execute Command"
-            disabled={isExecuting}
-          >
-            <CornerDownLeft className="w-4 h-4" />
-          </button>
-          {/* Cursor Control */}
-          <div className="flex items-center ml-2">
-            <button
-              onClick={() => {
-                if (xtermRef.current) {
-                  xtermRef.current.write('\x1b[A'); // Simulate Up arrow key
-                }
-              }}
-              className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center mr-1"
-              title="Cursor Up"
-              disabled={isExecuting}
+            <div
+              ref={terminalRef}
+              className="glass-morphism rounded-lg p-3 flex-1 overflow-y-auto terminal-output cursor-pointer hover:border-gray-600 transition-colors custom-scrollbar min-h-0"
             >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                if (xtermRef.current) {
-                  xtermRef.current.write('\x1b[B'); // Simulate Down arrow key
-                }
-              }}
-              className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center"
-              title="Cursor Down"
-              disabled={isExecuting}
-            >
-              <ArrowDown className="w-4 h-4" />
-            </button>
+              {/* xterm.js will render here */}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Command Selector */}
-      <div className={`relative z-10 glass-morphism border-t border-white/10 pb-3 flex flex-col flex-shrink-0 ${isExecuting ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="p-3 flex-1">
-          <div className="flex items-center justify-between h-full">
-            <button
-              onClick={() => scrollCommands('left')}
-              disabled={state.currentCommandIndex === 0}
-              className={`touch-friendly rounded-full transition-colors ${state.currentCommandIndex === 0 ? 'bg-gray-700 text-gray-500' : 'glass-morphism text-white hover:bg-white/20'}`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+          {/* Text Input Area */}
+          <div
+            className={`relative z-10 px-3 py-2 glass-morphism border-t border-white/10 flex-shrink-0 ${isExecuting ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            <div className="flex items-center">
+              <input
+                type="text"
+                value={state.textInput}
+                onChange={e =>
+                  setState(prev => ({ ...prev, textInput: e.target.value }))
+                }
+                onKeyDown={e => e.key === 'Enter' && handleTextSubmit()}
+                className="flex-1 bg-transparent text-white outline-none"
+                disabled={isExecuting}
+              />
+              <button
+                onClick={handleTextSubmit}
+                className="ml-2 touch-friendly glass-morphism rounded-full hover:bg-white/20"
+                title="Execute Command"
+                disabled={isExecuting}
+              >
+                <CornerDownLeft className="w-4 h-4" />
+              </button>
+              {/* Cursor Control */}
+              <div className="flex items-center ml-2">
+                <button
+                  onClick={() => {
+                    if (xtermRef.current) {
+                      xtermRef.current.write('\x1b[A'); // Simulate Up arrow key
+                    }
+                  }}
+                  className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center mr-1"
+                  title="Cursor Up"
+                  disabled={isExecuting}
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (xtermRef.current) {
+                      xtermRef.current.write('\x1b[B'); // Simulate Down arrow key
+                    }
+                  }}
+                  className="touch-friendly glass-morphism rounded-md w-6 h-6 flex items-center justify-center"
+                  title="Cursor Down"
+                  disabled={isExecuting}
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
 
-            <div className="flex-1 mx-3 overflow-hidden">
-              <div className="flex transition-transform duration-300 ease-out">
-                {visibleCommands.map((task, idx) => (
-                  <button
-                    key={state.currentCommandIndex + idx}
-                    onClick={() => executeCommand(task.command)}
-                    className="flex-shrink-0 w-16 flex flex-col items-center p-2 mx-1 glass-morphism rounded-lg hover:bg-white/10 transition-all touch-friendly no-select"
-                  >
-                    <span className="text-xl mb-1">{task.icon}</span>
-                    <span className="text-xs font-medium text-center leading-tight">{task.label}</span>
-                  </button>
+          {/* Command Selector */}
+          <div
+            className={`relative z-10 glass-morphism border-t border-white/10 pb-3 flex flex-col flex-shrink-0 ${isExecuting ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            <div className="p-3 flex-1">
+              <div className="flex items-center justify-between h-full">
+                <button
+                  onClick={() => scrollCommands('left')}
+                  disabled={state.currentCommandIndex === 0}
+                  className={`touch-friendly rounded-full transition-colors ${state.currentCommandIndex === 0 ? 'bg-gray-700 text-gray-500' : 'glass-morphism text-white hover:bg-white/20'}`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="flex-1 mx-3 overflow-hidden">
+                  <div className="flex transition-transform duration-300 ease-out">
+                    {visibleCommands.map((task, idx) => (
+                      <button
+                        key={state.currentCommandIndex + idx}
+                        onClick={() => executeCommand(task.command)}
+                        className="flex-shrink-0 w-16 flex flex-col items-center p-2 mx-1 glass-morphism rounded-lg hover:bg-white/10 transition-all touch-friendly no-select"
+                      >
+                        <span className="text-xl mb-1">{task.icon}</span>
+                        <span className="text-xs font-medium text-center leading-tight">
+                          {task.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => scrollCommands('right')}
+                  disabled={
+                    state.currentCommandIndex >= currentCommands.length - 5
+                  }
+                  className={`touch-friendly rounded-full transition-colors ${state.currentCommandIndex >= currentCommands.length - 5 ? 'bg-gray-700 text-gray-500' : 'glass-morphism text-white hover:bg-white/20'}`}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex justify-center mt-1 space-x-1">
+                {Array.from({
+                  length: Math.ceil(currentCommands.length / 5),
+                }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`w-1 h-1 rounded-full transition-colors ${Math.floor(state.currentCommandIndex / 5) === idx ? 'bg-white' : 'bg-white/30'}`}
+                  />
                 ))}
               </div>
             </div>
-
-            <button
-              onClick={() => scrollCommands('right')}
-              disabled={state.currentCommandIndex >= currentCommands.length - 5}
-              className={`touch-friendly rounded-full transition-colors ${state.currentCommandIndex >= currentCommands.length - 5 ? 'bg-gray-700 text-gray-500' : 'glass-morphism text-white hover:bg-white/20'}`}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
-
-          <div className="flex justify-center mt-1 space-x-1">
-            {Array.from({ length: Math.ceil(currentCommands.length / 5) }).map((_, idx) => (
-              <div
-                key={idx}
-                className={`w-1 h-1 rounded-full transition-colors ${Math.floor(state.currentCommandIndex / 5) === idx ? 'bg-white' : 'bg-white/30'}`}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
         </>
       )}
 
@@ -1215,22 +1352,30 @@ const App: React.FC = () => {
           <div className="glass-morphism rounded-xl p-4 w-full max-w-sm max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">Settings</h3>
-              <button 
-                onClick={() => setState(prev => ({ ...prev, showSettings: false }))}
+              <button
+                onClick={() =>
+                  setState(prev => ({ ...prev, showSettings: false }))
+                }
                 className="text-gray-400 hover:text-white touch-friendly"
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="mb-4 p-3 bg-white/5 rounded-lg">
               <h4 className="font-medium mb-2">Voice Recognition</h4>
               <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${state.voiceSupported ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                <span className="text-sm">{state.voiceSupported ? 'Available' : 'Not supported'}</span>
+                <div
+                  className={`w-2 h-2 rounded-full ${state.voiceSupported ? 'bg-green-400' : 'bg-red-400'}`}
+                ></div>
+                <span className="text-sm">
+                  {state.voiceSupported ? 'Available' : 'Not supported'}
+                </span>
               </div>
               <p className="text-xs opacity-60 mt-1">
-                {state.voiceSupported ? 'Tap microphone button and speak commands in Japanese or English' : 'Voice recognition is not supported in this browser'}
+                {state.voiceSupported
+                  ? 'Tap microphone button and speak commands in Japanese or English'
+                  : 'Voice recognition is not supported in this browser'}
               </p>
             </div>
 
@@ -1240,13 +1385,17 @@ const App: React.FC = () => {
                 <div className="flex items-start space-x-3">
                   <span className="text-lg">🤖</span>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{DEFAULT_PLAYLIST.metadata.name}</div>
+                    <div className="font-medium text-sm">
+                      {DEFAULT_PLAYLIST.metadata.name}
+                    </div>
                     <div className="text-xs opacity-80">Built-in</div>
-                    <div className="text-xs opacity-60 mt-1">{DEFAULT_PLAYLIST.metadata.description}</div>
+                    <div className="text-xs opacity-60 mt-1">
+                      {DEFAULT_PLAYLIST.metadata.description}
+                    </div>
                   </div>
                 </div>
               </div>
-              
+
               <button className="w-full p-3 rounded-lg text-left bg-gray-700 hover:bg-gray-600 transition-colors border-2 border-dashed border-gray-500">
                 <div className="flex items-center justify-center space-x-2">
                   <span className="text-lg">📁</span>

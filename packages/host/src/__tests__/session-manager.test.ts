@@ -38,11 +38,13 @@ describe('SessionManager', () => {
       expect(hostId).toMatch(/^[0-9]{8}$/);
     });
 
-    it('should generate unique host IDs', () => {
+    it('should use consistent host ID (permanent ID)', () => {
       const manager1 = new SessionManager();
       const manager2 = new SessionManager();
       
-      expect(manager1.getHostId()).not.toBe(manager2.getHostId());
+      // Host ID is now persistent, so both managers should use the same ID
+      expect(manager1.getHostId()).toBe(manager2.getHostId());
+      expect(manager1.getHostId()).toMatch(/^\d{8}$/);
       
       manager1.destroy();
       manager2.destroy();

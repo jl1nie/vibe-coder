@@ -15,21 +15,25 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:pwa": "pnpm --filter @vibe-coder/web dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "export HOST_UID=$(id -u) && export HOST_GID=$(id -g) && turbo run test",
     "test:ux": "playwright test",
     "test:e2e": "playwright test --config=playwright.config.ts",
     "test:local": "playwright test --config=playwright.config.ts",
+    "test-full-clean": "pnpm stop && docker system prune -f && pnpm start",
+    "test-full": "wait-on http://localhost:8080/api/health/live http://localhost:3001/api/health/live && playwright test --config=playwright.config.ts",
     "clean": "turbo run clean",
     "vibe-coder": "./scripts/vibe-coder",
     "start": "./scripts/vibe-coder start",
     "stop": "./scripts/vibe-coder stop",
     "logs": "./scripts/vibe-coder logs",
     "status": "./scripts/vibe-coder status",
-    "clean:env": "./scripts/vibe-coder clean"
+    "clean:env": "./scripts/vibe-coder clean",
+    "clean:vite": "pkill -f 'vite' 2>/dev/null || true"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
@@ -43,10 +47,16 @@
     "lint-staged": "^15.1.0",
     "prettier": "^3.1.0",
     "turbo": "^1.11.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "wait-on": "^7.2.0"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{json,md}": ["prettier --write"]
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   }
 }

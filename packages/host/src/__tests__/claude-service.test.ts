@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ClaudeService } from '../services/claude-service';
 import { spawn } from 'child_process';
 
@@ -59,7 +59,8 @@ describe('ClaudeService', () => {
       const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
       
       expect(result.success).toBe(true);
-      expect(spawn).toHaveBeenCalledWith('claude-code', ['help'], expect.any(Object));
+      // Claude Code transforms "claude-code help" to "claude --print help"
+      expect(spawn).toHaveBeenCalledWith('claude', ['--print', 'help'], expect.any(Object));
     });
   });
 
@@ -174,6 +175,7 @@ describe('ClaudeService', () => {
       const isHealthy = await claudeService.healthCheck();
       
       expect(isHealthy).toBe(true);
+      // Health check uses "claude-code --version" command
       expect(spawn).toHaveBeenCalledWith('claude-code', ['--version'], expect.any(Object));
     });
 

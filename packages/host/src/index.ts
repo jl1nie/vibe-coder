@@ -1,18 +1,18 @@
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 
+import { ClaudeService } from './services/claude-service';
+import { SessionManager } from './services/session-manager';
+import { WebRTCService } from './services/webrtc-service';
 import { hostConfig } from './utils/config';
 import logger from './utils/logger';
-import { SessionManager } from './services/session-manager';
-import { ClaudeService } from './services/claude-service';
-import { WebRTCService } from './services/webrtc-service';
 
-import { createHealthRouter } from './routes/health';
 import { createAuthRouter } from './routes/auth';
 import { createClaudeRouter } from './routes/claude';
+import { createHealthRouter } from './routes/health';
 import { createWebRTCRouter } from './routes/webrtc';
 
 import { errorHandler, notFoundHandler } from './middleware/error';
@@ -30,8 +30,11 @@ class VibeCoderHost {
     this.server = createServer(this.app);
     this.sessionManager = new SessionManager();
     this.claudeService = new ClaudeService();
-    this.webrtcService = new WebRTCService(this.sessionManager, this.claudeService);
-    
+    this.webrtcService = new WebRTCService(
+      this.sessionManager,
+      this.claudeService
+    );
+
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
@@ -41,24 +44,31 @@ class VibeCoderHost {
 
   private setupMiddleware(): void {
     // Security middleware
-    this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "blob:"],
+    this.app.use(
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", 'data:', 'blob:'],
+          },
         },
-      },
-    }));
+      })
+    );
 
     // CORS configuration
-    this.app.use(cors({
-      origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173'],
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-    }));
+    this.app.use(
+      cors({
+        origin: process.env.CORS_ORIGIN?.split(',') || [
+          'http://localhost:5173',
+          'https://vibe-coder.space',
+        ],
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+      })
+    );
 
     // Body parsing
     this.app.use(express.json({ limit: '10mb' }));
@@ -78,10 +88,19 @@ class VibeCoderHost {
 
   private setupRoutes(): void {
     // API routes
-    this.app.use('/api', createHealthRouter(this.claudeService, this.sessionManager));
+    this.app.use(
+      '/api',
+      createHealthRouter(this.claudeService, this.sessionManager)
+    );
     this.app.use('/api/auth', createAuthRouter(this.sessionManager));
-    this.app.use('/api/claude', createClaudeRouter(this.claudeService, this.sessionManager));
-    this.app.use('/api/webrtc', createWebRTCRouter(this.webrtcService, this.sessionManager));
+    this.app.use(
+      '/api/claude',
+      createClaudeRouter(this.claudeService, this.sessionManager)
+    );
+    this.app.use(
+      '/api/webrtc',
+      createWebRTCRouter(this.webrtcService, this.sessionManager)
+    );
 
     // Root endpoint
     this.app.get('/', (_req, res) => {
@@ -104,14 +123,18 @@ class VibeCoderHost {
     this.wss = new WebSocketServer({ server: this.server });
 
     this.wss.on('connection', (ws, req) => {
-      logger.info('WebSocket connection established', { ip: req.socket.remoteAddress });
-      
-      ws.on('message', (message) => {
+      logger.info('WebSocket connection established', {
+        ip: req.socket.remoteAddress,
+      });
+
+      ws.on('message', message => {
         try {
           const data = JSON.parse(message.toString());
           this.handleWebSocketMessage(ws, data);
         } catch (error) {
-          logger.error('Invalid WebSocket message', { error: (error as Error).message });
+          logger.error('Invalid WebSocket message', {
+            error: (error as Error).message,
+          });
           ws.send(JSON.stringify({ error: 'Invalid message format' }));
         }
       });
@@ -120,24 +143,29 @@ class VibeCoderHost {
         logger.info('WebSocket connection closed');
       });
 
-      ws.on('error', (error) => {
+      ws.on('error', error => {
         logger.error('WebSocket error', { error: error.message });
       });
 
       // Send initial connection success
-      ws.send(JSON.stringify({
-        type: 'connection',
-        hostId: this.sessionManager.getHostId(),
-        timestamp: new Date(),
-      }));
+      ws.send(
+        JSON.stringify({
+          type: 'connection',
+          hostId: this.sessionManager.getHostId(),
+          timestamp: new Date(),
+        })
+      );
     });
   }
 
   private setupCleanupTimer(): void {
     // 5分間隔でクリーンアップ
-    setInterval(() => {
-      this.webrtcService.cleanupInactiveConnections();
-    }, 5 * 60 * 1000);
+    setInterval(
+      () => {
+        this.webrtcService.cleanupInactiveConnections();
+      },
+      5 * 60 * 1000
+    );
   }
 
   private handleWebSocketMessage(ws: any, data: any): void {
@@ -145,14 +173,16 @@ class VibeCoderHost {
       case 'ping':
         ws.send(JSON.stringify({ type: 'pong', timestamp: new Date() }));
         break;
-        
+
       case 'heartbeat':
         if (data.sessionId) {
           this.sessionManager.updateSessionActivity(data.sessionId);
         }
-        ws.send(JSON.stringify({ type: 'heartbeat-ack', timestamp: new Date() }));
+        ws.send(
+          JSON.stringify({ type: 'heartbeat-ack', timestamp: new Date() })
+        );
         break;
-        
+
       default:
         logger.warn('Unknown WebSocket message type', { type: data.type });
         ws.send(JSON.stringify({ error: 'Unknown message type' }));
@@ -162,7 +192,11 @@ class VibeCoderHost {
   public async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server.on('error', (error: any) => {
-        logger.error('Server error', { error: error.message, code: error.code, stack: error.stack });
+        logger.error('Server error', {
+          error: error.message,
+          code: error.code,
+          stack: error.stack,
+        });
         reject(error);
       });
 
@@ -180,7 +214,7 @@ class VibeCoderHost {
             hostId: this.sessionManager.getHostId(),
             environment: process.env.NODE_ENV || 'development',
           });
-          
+
           // Also save Host ID to workspace for user visibility
           try {
             const workspaceDir = '/app/workspace';
@@ -193,7 +227,10 @@ class VibeCoderHost {
             fs.writeFileSync(hostIdFile, hostIdContent);
             console.log(`Host ID saved to: ${hostIdFile}`);
           } catch (error) {
-            console.warn('Could not save Host ID to workspace:', (error as Error).message);
+            console.warn(
+              'Could not save Host ID to workspace:',
+              (error as Error).message
+            );
           }
 
           console.log(`
@@ -209,11 +246,13 @@ class VibeCoderHost {
 │                                                             │
 ╰─────────────────────────────────────────────────────────────╯
           `);
-          
+
           resolve();
         });
       } catch (error) {
-        logger.error('Server listen failed', { error: (error as Error).message });
+        logger.error('Server listen failed', {
+          error: (error as Error).message,
+        });
         reject(error);
       }
     });
@@ -221,17 +260,17 @@ class VibeCoderHost {
 
   public async stop(): Promise<void> {
     logger.info('Shutting down Vibe Coder Host...');
-    
+
     // Close WebSocket server
     this.wss.close();
-    
+
     // Stop services
     this.claudeService.destroy();
     this.sessionManager.destroy();
     this.webrtcService.destroy();
-    
+
     // Close HTTP server
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.server.close(() => {
         logger.info('Vibe Coder Host stopped');
         resolve();
@@ -259,13 +298,16 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled rejection', { reason, promise });
 });
 
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+process.on('uncaughtException', error => {
+  logger.error('Uncaught exception', {
+    error: error.message,
+    stack: error.stack,
+  });
   process.exit(1);
 });
 
 // Start the server
-host.start().catch((error) => {
+host.start().catch(error => {
   logger.error('Failed to start server', { error: error.message });
   process.exit(1);
 });
