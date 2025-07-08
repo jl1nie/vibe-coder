@@ -1,9 +1,17 @@
 #!/bin/sh
 set -e
 
-# デフォルトUID/GID（環境変数が設定されていない場合）
-USER_UID=${HOST_UID:-1000}
-USER_GID=${HOST_GID:-1000}
+# 必須のUID/GID（環境変数が設定されていない場合はエラー）
+if [ -z "$HOST_UID" ] || [ -z "$HOST_GID" ]; then
+    echo "ERROR: HOST_UID and HOST_GID environment variables are required"
+    echo "Please set them before running Docker:"
+    echo "  export HOST_UID=\$(id -u)"
+    echo "  export HOST_GID=\$(id -g)"
+    exit 1
+fi
+
+USER_UID=$HOST_UID
+USER_GID=$HOST_GID
 
 echo "Setting up runtime user with UID:$USER_UID, GID:$USER_GID"
 

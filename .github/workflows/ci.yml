@@ -149,7 +149,10 @@ jobs:
           key: ${{ needs.setup.outputs.cache-key }}
 
       - name: Run unit tests
-        run: pnpm test -- --coverage
+        run: |
+          export HOST_UID=$(id -u)
+          export HOST_GID=$(id -g)
+          pnpm test -- --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
