@@ -297,7 +297,7 @@ export class WebRTCService {
   /**
    * シグナリングサーバーからのICE Candidateを処理
    */
-  public async handleIceCandidate(sessionId: string, candidate: string): Promise<void> {
+  public async handleIceCandidate(sessionId: string, candidate: any): Promise<void> {
     const connection = this.findConnectionBySessionId(sessionId);
     if (!connection) {
       logger.error('Connection not found for ICE candidate', { sessionId });
@@ -305,8 +305,8 @@ export class WebRTCService {
     }
 
     try {
-      const candidateData = JSON.parse(candidate);
-      connection.peer.signal(candidateData);
+      // candidate is already a JavaScript object, not a JSON string
+      connection.peer.signal(candidate);
       logger.info('ICE candidate processed successfully', { sessionId, connectionId: connection.id });
     } catch (error) {
       logger.error('Failed to process ICE candidate', {

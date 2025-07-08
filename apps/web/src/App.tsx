@@ -141,6 +141,16 @@ const initialState: AppState = {
 };
 
 const App: React.FC = () => {
+  // Server URLs configuration
+  const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
+    (process.env.NODE_ENV === 'production' 
+      ? 'https://vibe-coder.space' 
+      : 'http://localhost:5174');
+  const HOST_SERVER_URL = import.meta.env.VITE_HOST_SERVER_URL ||
+    (process.env.NODE_ENV === 'production'
+      ? 'https://host.vibe-coder.space'
+      : 'http://localhost:8081');
+
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -193,10 +203,6 @@ const App: React.FC = () => {
 
   // WebRTC Connection Management
   const initWebRTCConnection = () => {
-    const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
-      (process.env.NODE_ENV === 'production' 
-        ? 'https://vibe-coder.space' 
-        : 'http://localhost:5174');
     let pc: RTCPeerConnection | null = null;
     let dc: RTCDataChannel | null = null;
     let sessionId: string | null = state.auth.sessionId;
@@ -589,7 +595,7 @@ const App: React.FC = () => {
         } else {
           // Use REST API as fallback
           const response = await fetch(
-            'http://localhost:8080/api/claude/execute',
+            `${HOST_SERVER_URL}/api/claude/execute`,
             {
               method: 'POST',
               headers: {
@@ -719,7 +725,7 @@ const App: React.FC = () => {
       }));
 
       // Create session with host server
-      const response = await fetch('http://localhost:8080/api/auth/sessions', {
+      const response = await fetch(`${HOST_SERVER_URL}/api/auth/sessions`, {
         method: 'POST',
       });
 
@@ -782,7 +788,7 @@ const App: React.FC = () => {
       if (!state.auth.sessionId) {
         console.log('No sessionId, creating new session...');
         const sessionResponse = await fetch(
-          'http://localhost:8080/api/auth/sessions',
+          `${HOST_SERVER_URL}/api/auth/sessions`,
           {
             method: 'POST',
           }
@@ -825,7 +831,7 @@ const App: React.FC = () => {
         }));
       }
 
-      const verifyUrl = `http://localhost:8080/api/auth/sessions/${state.auth.sessionId}/verify`;
+      const verifyUrl = `${HOST_SERVER_URL}/api/auth/sessions/${state.auth.sessionId}/verify`;
       console.log('Calling TOTP verification API:', verifyUrl);
       const response = await fetch(verifyUrl, {
         method: 'POST',

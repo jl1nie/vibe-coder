@@ -15,7 +15,7 @@ function getOrCreateSessionSecret(): string {
   }
 
   // Save session secret in workspace directory (user's current directory)
-  const secretPath = path.resolve('/app/workspace', '.vibe-coder-session-secret');
+  const secretPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-session-secret');
 
   // Try to read existing secret
   try {
@@ -54,7 +54,7 @@ function getOrCreateTotpSecret(): string {
   }
 
   // Save TOTP secret in workspace directory (user's current directory)
-  const secretPath = path.resolve('/app/workspace', '.vibe-coder-totp-secret');
+  const secretPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-totp-secret');
 
   // Try to read existing secret
   try {
@@ -99,7 +99,7 @@ function getOrCreateHostId(): string {
   }
 
   // Save Host ID in workspace directory (user's current directory)
-  const hostIdPath = path.resolve('/app/workspace', '.vibe-coder-host-id');
+  const hostIdPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-host-id');
 
   // Try to read existing Host ID
   try {
@@ -133,9 +133,9 @@ function getOrCreateHostId(): string {
 
 function createDefaultConfig(): HostConfig {
   return {
-    port: 8080,
-    claudeConfigPath: '/app/.claude',
-    signalingUrl: 'https://vibe-coder.space/api/signal',
+    port: process.env.NODE_ENV === 'development' ? 8081 : (process.env.PORT ? parseInt(process.env.PORT) : 8080),
+    claudeConfigPath: process.env.NODE_ENV === 'development' ? process.cwd() + '/.claude' : '/app/.claude',
+    signalingUrl: process.env.NODE_ENV === 'development' ? 'http://localhost:5174/api/signal' : 'https://vibe-coder.space/api/signal',
     sessionSecret: getOrCreateSessionSecret(),
     totpSecret: getOrCreateTotpSecret(),
     maxConcurrentSessions: 10,
