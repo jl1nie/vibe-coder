@@ -115,13 +115,13 @@ export function createAuthRouter(sessionManager: SessionManager): Router {
       });
     }
 
-    const { sessionId, totpSecret } = await sessionManager.createSession();
+    const { sessionId } = await sessionManager.createSession();
     
     res.status(201).json({
       sessionId,
       hostId: sessionManager.getHostId(),
-      totpSecret,
-      message: 'Enter the 6-digit code from your authenticator app',
+      // Don't return totpSecret to PWA - forces server-side setup
+      message: 'Enter the 6-digit code from your authenticator app. If you haven\'t set up 2FA yet, please access localhost:8080/setup from the host machine.',
     });
   }));
 
