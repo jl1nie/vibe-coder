@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { createServer } from 'http';
+import QRCode from 'qrcode';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
@@ -403,17 +404,143 @@ class VibeCoderHost {
       `);
     });
 
-    // Root endpoint
-    this.app.get('/', (_req: express.Request, res: express.Response) => {
-      res.json({
-        name: 'Vibe Coder Host',
-        version: '0.1.0',
-        hostId: this.sessionManager.getHostId(),
-        status: 'running',
-        timestamp: new Date(),
-        setupUrl: '/setup',
-        message: 'Access /setup from localhost to configure 2FA',
-      });
+    // Root endpoint - Display Host ID and TOTP Secret
+    this.app.get('/', async (_req: express.Request, res: express.Response) => {
+      const hostId = this.sessionManager.getHostId();
+      const totpSecret = hostConfig.totpSecret;
+      
+      // Generate QR code for TOTP
+      const totpUrl = `otpauth://totp/Vibe%20Coder:${hostId}?secret=${totpSecret}&issuer=Vibe%20Coder`;
+      let qrCodeDataUrl = '';
+      
+      try {
+        qrCodeDataUrl = await QRCode.toDataURL(totpUrl);
+      } catch (error) {
+        console.error('Failed to generate QR code:', error);
+        qrCodeDataUrl = ''; // Will show fallback message
+      }
+      
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Vibe Coder Host - ${hostId}</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              max-width: 600px; 
+              margin: 0 auto; 
+              padding: 20px; 
+              background: #f5f5f5; 
+            }
+            .container { 
+              background: white; 
+              padding: 30px; 
+              border-radius: 10px; 
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+            }
+            .host-id { 
+              font-size: 32px; 
+              font-weight: bold; 
+              color: #007bff; 
+              background: #e3f2fd; 
+              padding: 20px; 
+              border-radius: 10px; 
+              margin: 20px 0; 
+              text-align: center;
+            }
+            .totp-secret { 
+              font-family: monospace; 
+              background: #f8f9fa; 
+              padding: 15px; 
+              border-radius: 5px; 
+              word-break: break-all; 
+              margin: 20px 0; 
+              border: 2px solid #dee2e6;
+            }
+            .instructions { 
+              background: #e8f5e8; 
+              padding: 20px; 
+              border-radius: 5px; 
+              margin: 20px 0; 
+            }
+            .instructions ol { 
+              padding-left: 20px; 
+            }
+            .instructions li { 
+              margin: 10px 0; 
+            }
+            .status { 
+              background: #d1ecf1; 
+              color: #0c5460; 
+              padding: 10px; 
+              border-radius: 5px; 
+              margin: 20px 0; 
+              text-align: center;
+            }
+            .warning {
+              background: #fff3cd;
+              color: #856404;
+              padding: 15px;
+              border-radius: 5px;
+              margin: 20px 0;
+              border-left: 4px solid #ffc107;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🎯 Vibe Coder Host Server</h1>
+              <p>Mobile Claude Code Remote Development Environment</p>
+            </div>
+
+            <div class="status">
+              🟢 Server Running - Ready for PWA connections
+            </div>
+
+            <div class="host-id">
+              Host ID: ${hostId}
+            </div>
+
+            <div>
+              <h3>🔐 TOTP Authentication Setup:</h3>
+              <div style="text-align: center; margin: 20px 0;">
+                ${qrCodeDataUrl ? 
+                  `<img src="${qrCodeDataUrl}" alt="TOTP QR Code" style="border: 2px solid #dee2e6; padding: 10px; background: white; border-radius: 10px;">` : 
+                  '<p style="color: #dc3545;">❌ QR Code generation failed. Please use manual entry below.</p>'
+                }
+              </div>
+              <details style="margin: 10px 0;">
+                <summary style="cursor: pointer; font-weight: bold;">📝 Manual Entry (if QR code doesn't work)</summary>
+                <div class="totp-secret" style="margin-top: 10px;">${totpSecret}</div>
+              </details>
+            </div>
+
+            <div class="instructions">
+              <h3>📱 Connection Instructions:</h3>
+              <ol>
+                <li><strong>Scan QR Code:</strong> Use your authenticator app (Google Authenticator, Authy, etc.) to scan the QR code above</li>
+                <li><strong>Access PWA:</strong> Open <a href="http://localhost:5174" target="_blank">http://localhost:5174</a> (or <a href="https://www.vibe-coder.space" target="_blank">production</a>)</li>
+                <li><strong>Enter Host ID:</strong> ${hostId}</li>
+                <li><strong>2FA Authentication:</strong> Enter the 6-digit code from your authenticator app</li>
+                <li><strong>Start Coding:</strong> Execute Claude Code commands remotely!</li>
+              </ol>
+            </div>
+
+            <div class="warning">
+              <strong>⚠️ Security Note:</strong> This TOTP secret is permanently saved and will persist across server restarts. Keep it secure!
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
     });
   }
 

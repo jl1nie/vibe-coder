@@ -37,11 +37,14 @@ WORKDIR /app
 RUN npm install -g pnpm@latest
 RUN npm install -g @anthropic-ai/claude-code
 
-# Add security packages
+# Add security packages and Claude CLI requirements
 RUN apk add --no-cache \
     dumb-init \
     su-exec \
     curl \
+    zsh \
+    git \
+    bash \
     && rm -rf /var/cache/apk/*
 
 # Copy package files

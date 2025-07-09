@@ -18,6 +18,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 - **ポート**: 8080
 - **機能**: Claude Code統合、WebRTC P2P接続、認証管理
 - **永続化**: Host ID、セッション情報、TOTP秘密鍵
+- **重要**: `docker compose` コマンドを使用（`docker-compose` は古いコマンド）
 
 **認証・接続フロー**
 1. **8桁キー認証**: Host ID生成・表示
@@ -95,8 +96,15 @@ pnpm build
 ### 1. ホストサーバー開発
 
 ```bash
-# Docker環境での開発
-pnpm --filter @vibe-coder/host dev
+# Docker環境での開発（重要：docker compose を使用）
+export HOST_UID=$(id -u) && export HOST_GID=$(id -g)
+docker compose up --build -d
+
+# Dockerコンテナ再起動
+docker compose restart vibe-coder-host
+
+# Dockerコンテナ停止
+docker compose down
 
 # 単体テスト実行
 pnpm --filter @vibe-coder/host test

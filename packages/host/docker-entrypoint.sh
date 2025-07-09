@@ -46,5 +46,10 @@ if ! claude --version > /dev/null 2>&1; then
   exit 1
 fi
 
+# Claude CLIに必要な環境変数を設定（公式仕様に準拠）
+export SHELL=/bin/zsh
+export USER=vibecoder
+export HOME=/home/vibecoder
+
 # 指定されたユーザーでアプリケーションを実行
 exec su-exec $USER_UID:$USER_GID "$@"

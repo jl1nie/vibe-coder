@@ -7,6 +7,14 @@ process.env.LOG_LEVEL = 'error';
 process.env.NODE_ENV = 'test';
 process.env.CLAUDE_CONFIG_PATH = '/tmp/test-claude-config';
 
+// Set HOST_UID/HOST_GID to current user's UID/GID for Docker tests
+if (!process.env.HOST_UID) {
+  process.env.HOST_UID = process.getuid?.()?.toString() || '1000';
+}
+if (!process.env.HOST_GID) {
+  process.env.HOST_GID = process.getgid?.()?.toString() || '1000';
+}
+
 // Mock child_process
 vi.mock('child_process', () => ({
   spawn: vi.fn().mockImplementation(() => ({

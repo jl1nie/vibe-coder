@@ -144,7 +144,7 @@ const App: React.FC = () => {
   const HOST_SERVER_URL = import.meta.env.VITE_HOST_SERVER_URL ||
     (process.env.NODE_ENV === 'production'
       ? 'https://host.vibe-coder.space'
-      : 'http://localhost:8081');
+      : `http://localhost:${import.meta.env.VITE_HOST_PORT || '8080'}`);
 
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);
