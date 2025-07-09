@@ -735,7 +735,7 @@ const App: React.FC = () => {
         if (response.status === 404) {
           throw new Error(
             'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
-            '初回セットアップの場合は、ホストサーバーの http://localhost:8080/api/auth/setup にアクセスしてください。'
+            'ホストサーバーでの2FA設定が必要です。ホストマシンから http://localhost:8080/setup にアクセスしてください。'
           );
         } else if (response.status === 500) {
           throw new Error('ホストサーバーに接続できません');
@@ -746,25 +746,15 @@ const App: React.FC = () => {
 
       const data = await response.json();
 
-      // Generate QR Code for TOTP
-      const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${data.totpSecret}&issuer=Vibe%20Coder`;
-      const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      });
-
+      // Go directly to TOTP input (no QR code generation on PWA side)
       setState(prev => ({
         ...prev,
         auth: {
           ...prev.auth,
           status: 'entering_totp',
           sessionId: data.sessionId,
-          totpSecret: data.totpSecret,
-          qrCodeUrl: qrCodeDataUrl,
+          totpSecret: null, // Don't store secret on PWA side
+          qrCodeUrl: null, // No QR code on PWA side
           totpInput: '', // Clear TOTP input
         },
       }));
