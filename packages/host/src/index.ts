@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { createServer } from 'http';
+import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
 import { ClaudeService } from './services/claude-service';
