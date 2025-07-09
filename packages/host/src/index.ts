@@ -103,14 +103,228 @@ class VibeCoderHost {
       createWebRTCRouter(this.webrtcService, this.sessionManager)
     );
 
+    // 2FA Setup page (localhost only)
+    this.app.get('/setup', (req: express.Request, res: express.Response) => {
+      const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+      const forwardedFor = req.get('x-forwarded-for');
+      
+      // Check if request is from localhost
+      const isLocalhost = clientIp === '127.0.0.1' || 
+                         clientIp === '::1' || 
+                         clientIp === '::ffff:127.0.0.1' ||
+                         clientIp?.startsWith('127.') ||
+                         (!forwardedFor && clientIp === '::ffff:172.') || // Docker internal
+                         (!forwardedFor && clientIp?.startsWith('192.168.'));
+      
+      if (!isLocalhost) {
+        logger.warn('Unauthorized access attempt to setup page', { 
+          clientIp, 
+          forwardedFor,
+          userAgent: req.get('User-Agent') 
+        });
+        return res.status(403).send(`
+          <html>
+            <head><title>Access Denied</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1>🚫 Access Denied</h1>
+              <p>2FA setup requires physical access to the host machine.</p>
+              <p>Please access this page from localhost.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      // Serve the setup page
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Vibe Coder 2FA Setup</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              max-width: 800px; 
+              margin: 0 auto; 
+              padding: 20px; 
+              background: #f5f5f5; 
+            }
+            .container { 
+              background: white; 
+              padding: 30px; 
+              border-radius: 10px; 
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+            }
+            .host-id { 
+              font-size: 24px; 
+              font-weight: bold; 
+              color: #007bff; 
+              background: #e3f2fd; 
+              padding: 10px; 
+              border-radius: 5px; 
+              margin: 20px 0; 
+            }
+            .qr-container { 
+              text-align: center; 
+              margin: 30px 0; 
+            }
+            .secret-key { 
+              font-family: monospace; 
+              background: #f8f9fa; 
+              padding: 10px; 
+              border-radius: 5px; 
+              word-break: break-all; 
+              margin: 10px 0; 
+            }
+            .instructions { 
+              background: #e8f5e8; 
+              padding: 20px; 
+              border-radius: 5px; 
+              margin: 20px 0; 
+            }
+            .instructions ol { 
+              padding-left: 20px; 
+            }
+            .instructions li { 
+              margin: 10px 0; 
+            }
+            #setupButton { 
+              background: #007bff; 
+              color: white; 
+              border: none; 
+              padding: 12px 24px; 
+              border-radius: 5px; 
+              cursor: pointer; 
+              font-size: 16px; 
+              margin: 20px 0; 
+            }
+            #setupButton:hover { 
+              background: #0056b3; 
+            }
+            #setupButton:disabled { 
+              background: #6c757d; 
+              cursor: not-allowed; 
+            }
+            .error { 
+              color: #dc3545; 
+              background: #f8d7da; 
+              padding: 10px; 
+              border-radius: 5px; 
+              margin: 10px 0; 
+            }
+            .success { 
+              color: #155724; 
+              background: #d4edda; 
+              padding: 10px; 
+              border-radius: 5px; 
+              margin: 10px 0; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Vibe Coder 2FA Setup</h1>
+              <p>Secure your Claude Code host server with two-factor authentication</p>
+            </div>
+
+            <div class="host-id">
+              Host ID: ${this.sessionManager.getHostId()}
+            </div>
+
+            <div class="instructions">
+              <h3>Setup Instructions:</h3>
+              <ol>
+                <li>Click the "Generate 2FA Setup" button below</li>
+                <li>Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</li>
+                <li>Or manually enter the secret key into your authenticator app</li>
+                <li>Use the Vibe Coder PWA at <a href="https://www.vibe-coder.space" target="_blank">https://www.vibe-coder.space</a></li>
+                <li>Enter your Host ID: <strong>${this.sessionManager.getHostId()}</strong></li>
+                <li>Enter the 6-digit code from your authenticator app</li>
+              </ol>
+            </div>
+
+            <div style="text-align: center;">
+              <button id="setupButton" onclick="generateSetup()">Generate 2FA Setup</button>
+            </div>
+
+            <div id="setupResult"></div>
+          </div>
+
+          <script>
+            async function generateSetup() {
+              const button = document.getElementById('setupButton');
+              const resultDiv = document.getElementById('setupResult');
+              
+              button.disabled = true;
+              button.textContent = 'Generating...';
+              resultDiv.innerHTML = '';
+
+              try {
+                const response = await fetch('/api/auth/setup');
+                const data = await response.json();
+
+                if (response.ok) {
+                  resultDiv.innerHTML = \`
+                    <div class="success">
+                      <h3>✅ 2FA Setup Generated</h3>
+                      <p>Session ID: \${data.sessionId}</p>
+                    </div>
+                    <div class="qr-container">
+                      <h3>QR Code:</h3>
+                      <div id="qrcode"></div>
+                    </div>
+                    <div>
+                      <h3>Secret Key (for manual entry):</h3>
+                      <div class="secret-key">\${data.totpSecret}</div>
+                    </div>
+                  \`;
+
+                  // Generate QR code
+                  const qrcode = document.getElementById('qrcode');
+                  const qrUrl = \`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=\${encodeURIComponent(data.totpUrl)}\`;
+                  qrcode.innerHTML = \`<img src="\${qrUrl}" alt="QR Code" style="border: 1px solid #ccc; padding: 10px; background: white;">\`;
+                } else {
+                  resultDiv.innerHTML = \`
+                    <div class="error">
+                      <h3>❌ Error</h3>
+                      <p>\${data.error}</p>
+                    </div>
+                  \`;
+                }
+              } catch (error) {
+                resultDiv.innerHTML = \`
+                  <div class="error">
+                    <h3>❌ Connection Error</h3>
+                    <p>Failed to connect to server: \${error.message}</p>
+                  </div>
+                \`;
+              } finally {
+                button.disabled = false;
+                button.textContent = 'Generate New 2FA Setup';
+              }
+            }
+          </script>
+        </body>
+        </html>
+      `);
+    });
+
     // Root endpoint
-    this.app.get('/', (_req, res) => {
+    this.app.get('/', (_req: express.Request, res: express.Response) => {
       res.json({
         name: 'Vibe Coder Host',
         version: '0.1.0',
         hostId: this.sessionManager.getHostId(),
         status: 'running',
         timestamp: new Date(),
+        setupUrl: '/setup',
+        message: 'Access /setup from localhost to configure 2FA',
       });
     });
   }
@@ -169,7 +383,7 @@ class VibeCoderHost {
     );
   }
 
-  private handleWebSocketMessage(ws: any, data: any): void {
+  private handleWebSocketMessage(ws: WebSocket, data: any): void {
     switch (data.type) {
       case 'ping':
         ws.send(JSON.stringify({ type: 'pong', timestamp: new Date() }));

@@ -724,15 +724,18 @@ const App: React.FC = () => {
         auth: { ...prev.auth, error: null },
       }));
 
-      // Create session with host server
+      // Create session with host server - now requires Host ID validation
       const response = await fetch(`${HOST_SERVER_URL}/api/auth/sessions`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostId: state.auth.hostId }),
       });
 
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error(
-            'Host IDが見つかりません。正しい8桁の数字を入力してください'
+            'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
+            '初回セットアップの場合は、ホストサーバーの http://localhost:8080/api/auth/setup にアクセスしてください。'
           );
         } else if (response.status === 500) {
           throw new Error('ホストサーバーに接続できません');
@@ -791,13 +794,16 @@ const App: React.FC = () => {
           `${HOST_SERVER_URL}/api/auth/sessions`,
           {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hostId: state.auth.hostId }),
           }
         );
 
         if (!sessionResponse.ok) {
           if (sessionResponse.status === 404) {
             throw new Error(
-              'Host IDが見つかりません。正しい8桁の数字を入力してください'
+              'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
+              '初回セットアップの場合は、ホストサーバーの http://localhost:8080/api/auth/setup にアクセスしてください。'
             );
           } else if (sessionResponse.status === 500) {
             throw new Error('ホストサーバーに接続できません');

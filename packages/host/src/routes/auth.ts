@@ -1,22 +1,79 @@
 import { Router } from 'express';
-import { SessionManager } from '../services/session-manager';
 import { createSessionValidationMiddleware } from '../middleware/auth';
 import { asyncHandler } from '../middleware/error';
+import { SessionManager } from '../services/session-manager';
 import logger from '../utils/logger';
 
 export function createAuthRouter(sessionManager: SessionManager): Router {
   const router = Router();
   const sessionValidation = createSessionValidationMiddleware(sessionManager);
 
-  // Create new session and get TOTP secret for 2FA setup
-  router.post('/sessions', asyncHandler(async (_req, res) => {
+  // Localhost-only 2FA setup route (requires physical access to host)
+  router.get('/setup', asyncHandler(async (req, res) => {
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+    const forwardedFor = req.get('x-forwarded-for');
+    
+    // Check if request is from localhost
+    const isLocalhost = clientIp === '127.0.0.1' || 
+                       clientIp === '::1' || 
+                       clientIp === '::ffff:127.0.0.1' ||
+                       clientIp?.startsWith('127.') ||
+                       (!forwardedFor && clientIp === '::ffff:172.') || // Docker internal
+                       (!forwardedFor && clientIp?.startsWith('192.168.'));
+    
+    if (!isLocalhost) {
+      logger.warn('Unauthorized access attempt to 2FA setup', { 
+        clientIp, 
+        forwardedFor,
+        userAgent: req.get('User-Agent') 
+      });
+      return res.status(403).json({ 
+        error: 'Access denied. 2FA setup requires physical access to the host machine.' 
+      });
+    }
+
+    const { sessionId, totpSecret } = await sessionManager.createSession();
+    
+    // Generate QR code URL for setup
+    const totpUrl = `otpauth://totp/Vibe%20Coder:${sessionManager.getHostId()}?secret=${totpSecret}&issuer=Vibe%20Coder`;
+    
+    res.json({
+      sessionId,
+      hostId: sessionManager.getHostId(),
+      totpSecret,
+      totpUrl,
+      message: 'Setup your 2FA authenticator with the provided secret, then use the mobile app to authenticate',
+      setupInstructions: [
+        '1. Scan the QR code with your authenticator app',
+        '2. Or manually enter the TOTP secret',
+        '3. Use the Vibe Coder PWA to connect with this Host ID',
+        '4. Enter the 6-digit code from your authenticator'
+      ]
+    });
+  }));
+
+  // Create new session - now requires pre-authorized Host ID
+  router.post('/sessions', asyncHandler(async (req, res) => {
+    const { hostId } = req.body;
+    
+    if (!hostId || hostId !== sessionManager.getHostId()) {
+      logger.warn('Invalid Host ID attempt', { 
+        providedHostId: hostId,
+        actualHostId: sessionManager.getHostId(),
+        ip: req.ip 
+      });
+      return res.status(404).json({ 
+        error: 'Host ID not found. Please ensure you have the correct Host ID from your host server.' 
+      });
+    }
+
     const { sessionId, totpSecret } = await sessionManager.createSession();
     
     res.status(201).json({
       sessionId,
       hostId: sessionManager.getHostId(),
       totpSecret,
-      message: 'Enter the TOTP secret in your authenticator app, then provide TOTP code',
+      message: 'Enter the 6-digit code from your authenticator app',
     });
   }));
 
