@@ -242,7 +242,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 // Session management endpoint
-app.post('/api/session', (req, res) => {
+app.post('/api/session', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Session endpoint active',

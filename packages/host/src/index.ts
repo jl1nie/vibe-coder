@@ -647,7 +647,10 @@ class VibeCoderHost {
 
           // Also save Host ID to workspace for user visibility
           try {
-            const workspaceDir = '/app/workspace';
+            const workspaceDir = process.env.VIBE_CODER_WORKSPACE_PATH;
+            if (!workspaceDir) {
+              throw new Error('FATAL: Required environment variable VIBE_CODER_WORKSPACE_PATH is not set');
+            }
             const fs = require('fs');
             if (!fs.existsSync(workspaceDir)) {
               fs.mkdirSync(workspaceDir, { recursive: true });

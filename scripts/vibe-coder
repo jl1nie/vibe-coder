@@ -31,47 +31,68 @@ log_error() {
 usage() {
   echo "Vibe Coder Management Script"
   echo
-  echo "Usage: $0 {start|stop|logs|status|clean|dev|prod|setup|host-id|test|e2e}"
+  echo "Usage: $0 {start|stop|logs|status|clean|dev|prod|setup|host-id|test|e2e} [options]"
   echo
   echo "Commands:"
   echo "  start   : Start Vibe Coder in production mode"
-  echo "  dev     : Start in development mode"
-  echo "  prod    : Start in production mode (same as start)"
+  echo "  dev     : Start in development mode (環境変数: .env.development)"
+  echo "  prod    : Start in production mode (環境変数: .env.production)"
   echo "  stop    : Stop all services"
   echo "  logs    : Follow the logs of the services"
   echo "  status  : Show service status and health"
   echo "  host-id : Show or check the Host ID for connection"
   echo "  clean   : Stop services and remove containers/images"
   echo "  setup   : Setup environment and check configuration"
-  echo "  test    : Run unit and integration tests"
-  echo "  e2e     : Run end-to-end tests (requires running services)"
+  echo "  test    : Run unit and integration tests (dev mode only)"
+  echo "  e2e     : Run end-to-end tests (dev mode only)"
+  echo
+  echo "Developer Options:"
+  echo "  dev --local : Start in local development mode (no Docker)"
+  echo "  dev --docker: Start in Docker development mode"
   echo
   echo "Environment Variables:"
   echo "  HOST_UID/HOST_GID - Auto-detected from current user"
-  echo "  All configuration files are saved in current directory (.vibe-coder-*)"
+  echo "  Mode-specific env files: .env.development, .env.production"
 }
 
-# 環境設定
+# 環境設定（モード別）
 setup_env() {
+    local MODE="${1:-production}"
+    
     # ホストのUID/GIDを自動設定
     export HOST_UID=$(id -u)
     export HOST_GID=$(id -g)
     
     log_info "Using HOST_UID=$HOST_UID, HOST_GID=$HOST_GID"
     
-    # .envファイルの存在確認
-    if [[ ! -f ".env" ]]; then
-        log_warn ".env file not found, copying from .env.example"
-        cp .env.example .env
-        log_info "Please edit .env file with your configuration"
+    # モード別環境変数ファイル
+    local ENV_FILE=".env.$MODE"
+    
+    if [[ ! -f "$ENV_FILE" ]]; then
+        log_error "Environment file not found: $ENV_FILE"
+        log_info "Available environment files:"
+        ls -la .env.* 2>/dev/null || log_warn "No environment files found"
+        exit 1
     fi
     
-    # .envから環境変数を読み込み
-    if [[ -f ".env" ]]; then
-        set -a
-        source .env
-        set +a
-    fi
+    # 環境変数を読み込み
+    log_info "Loading environment variables from $ENV_FILE"
+    set -a
+    source "$ENV_FILE"
+    set +a
+    
+    # 必須環境変数の確認
+    local required_vars=("VIBE_CODER_PORT" "VIBE_CODER_PWA_URL" "VIBE_CODER_SIGNALING_URL" "VIBE_CODER_CLAUDE_PATH" "VIBE_CODER_WORKSPACE_PATH")
+    
+    for var in "${required_vars[@]}"; do
+        if [[ -z "${!var}" ]]; then
+            log_error "Required environment variable $var is not set in $ENV_FILE"
+            exit 1
+        fi
+    done
+    
+    log_success "Environment loaded: $MODE mode"
+    log_info "PORT=$VIBE_CODER_PORT, PWA_URL=$VIBE_CODER_PWA_URL"
 }
 
 # 起動前チェック
@@ -134,6 +155,82 @@ show_startup_info() {
     show_host_id
 }
 
+# 開発者向けローカル起動
+start_dev_local() {
+    log_info "Starting Vibe Coder in local development mode..."
+    setup_env "development"
+    
+    # 既存プロセス終了
+    log_info "Stopping existing processes..."
+    ps aux | grep "node.*vibe-coder" | grep -v grep | awk '{print $2}' | xargs -r kill 2>/dev/null || true
+    docker ps | grep vibe-coder-host && docker stop vibe-coder-host || true
+    
+    # ビルド
+    log_info "Building packages..."
+    pnpm build
+    
+    # ホストサーバー起動
+    log_info "Starting host server on port $VIBE_CODER_PORT..."
+    cd packages/host
+    env \
+        VIBE_CODER_PORT="$VIBE_CODER_PORT" \
+        VIBE_CODER_WORKSPACE_PATH="$VIBE_CODER_WORKSPACE_PATH" \
+        VIBE_CODER_SIGNALING_URL="$VIBE_CODER_SIGNALING_URL" \
+        VIBE_CODER_CLAUDE_PATH="$VIBE_CODER_CLAUDE_PATH" \
+        VIBE_CODER_PWA_URL="$VIBE_CODER_PWA_URL" \
+        pnpm start &
+    HOST_PID=$!
+    cd ../..
+    
+    # シグナリングサーバー起動
+    log_info "Starting signaling server on port $VIBE_CODER_PWA_PORT..."
+    cd packages/signaling
+    env \
+        VIBE_CODER_PWA_PORT="$VIBE_CODER_PWA_PORT" \
+        VIBE_CODER_SIGNALING_URL="$VIBE_CODER_SIGNALING_URL" \
+        pnpm dev:vercel &
+    SIGNALING_PID=$!
+    cd ../..
+    
+    # 起動確認
+    log_info "Waiting for services to start..."
+    sleep 10
+    
+    if curl -s http://localhost:$VIBE_CODER_PORT/api/health > /dev/null 2>&1; then
+        log_success "Host server is running on port $VIBE_CODER_PORT"
+    else
+        log_error "Host server failed to start"
+        kill $HOST_PID $SIGNALING_PID 2>/dev/null || true
+        exit 1
+    fi
+    
+    if curl -s http://localhost:$VIBE_CODER_PWA_PORT > /dev/null 2>&1; then
+        log_success "PWA server is running on port $VIBE_CODER_PWA_PORT"
+    else
+        log_error "PWA server failed to start"
+        kill $HOST_PID $SIGNALING_PID 2>/dev/null || true
+        exit 1
+    fi
+    
+    log_success "Local development environment started!"
+    echo
+    echo "╔════════════════════════════════════════╗"
+    echo "║          DEVELOPMENT MODE              ║"
+    echo "║                                        ║"
+    echo "║  Host Server: http://localhost:$VIBE_CODER_PORT     ║"
+    echo "║  PWA Server:  http://localhost:$VIBE_CODER_PWA_PORT     ║"
+    echo "║                                        ║"
+    echo "║  Press Ctrl+C to stop all services    ║"
+    echo "╚════════════════════════════════════════╝"
+    echo
+    
+    # プロセス終了時のクリーンアップ
+    trap 'log_info "Stopping services..."; kill $HOST_PID $SIGNALING_PID 2>/dev/null || true; exit 0' INT
+    
+    # フォアグラウンドで待機
+    wait
+}
+
 # --- Main Script ---
 
 # Check if a subcommand is provided
@@ -149,7 +246,7 @@ cd "$(dirname "$0")/.."
 case "$1" in
   start|prod)
     log_info "Starting Vibe Coder in production mode..."
-    setup_env
+    setup_env "production"
     check_requirements
     if [[ "$2" == "--no-build" ]]; then
       if [[ "$3" == "-d" || "$4" == "-d" ]]; then
@@ -168,15 +265,27 @@ case "$1" in
     show_startup_info
     ;;
   dev)
-    log_info "Starting Vibe Coder in development mode..."
-    setup_env
-    check_requirements
-    export ENABLE_SECURITY=false
-    export LOG_LEVEL=debug
-    # Build once (no UID/GID needed at build time)
-    docker compose -f docker-compose.yml build
-    # Start with runtime UID/GID (passed via environment variables)
-    docker compose -f docker-compose.yml up
+    case "$2" in
+      --local)
+        start_dev_local
+        ;;
+      --docker|"")
+        log_info "Starting Vibe Coder in Docker development mode..."
+        setup_env "development"
+        check_requirements
+        export ENABLE_SECURITY=false
+        export LOG_LEVEL=debug
+        # Build once (no UID/GID needed at build time)
+        docker compose -f docker-compose.yml build
+        # Start with runtime UID/GID (passed via environment variables)
+        docker compose -f docker-compose.yml up
+        ;;
+      *)
+        log_error "Invalid dev option: $2"
+        log_info "Use: dev --local or dev --docker"
+        exit 1
+        ;;
+    esac
     ;;
   stop)
     log_info "Stopping Vibe Coder..."
@@ -208,19 +317,19 @@ case "$1" in
     log_success "Cleanup complete"
     ;;
   setup)
-    setup_env
+    setup_env "development"
     check_requirements
     log_success "Setup completed"
     ;;
   test)
-    log_info "Running unit and integration tests..."
-    setup_env
+    log_info "Running unit and integration tests (development mode only)..."
+    setup_env "development"
     pnpm test
     log_success "Tests completed"
     ;;
   e2e)
-    log_info "Running end-to-end tests..."
-    setup_env
+    log_info "Running end-to-end tests (development mode only)..."
+    setup_env "development"
     
     # サービスが起動しているかチェック
     if ! curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
