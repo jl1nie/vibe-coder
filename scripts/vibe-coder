@@ -165,9 +165,9 @@ start_dev_local() {
     ps aux | grep "node.*vibe-coder" | grep -v grep | awk '{print $2}' | xargs -r kill 2>/dev/null || true
     docker ps | grep vibe-coder-host && docker stop vibe-coder-host || true
     
-    # ビルド
-    log_info "Building packages..."
-    pnpm build
+    # ビルド（環境変数変更を反映するため強制re-build）
+    log_info "Building packages with environment variables..."
+    pnpm build --force
     
     # ホストサーバー起動
     log_info "Starting host server on port $VIBE_CODER_PORT..."

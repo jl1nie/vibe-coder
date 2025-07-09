@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
@@ -24,7 +24,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://vibe-coder.space,https://*.vibe-coder.space,http://localhost:5173,http://localhost:3000"
+          "value": "https://www.vibe-coder.space,http://localhost:5174"
         },
         {
           "key": "Access-Control-Allow-Methods",

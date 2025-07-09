@@ -5,8 +5,27 @@ import { generateHostId } from '../../../shared/src';
 import { HostConfig } from '../types';
 import { generateSessionSecret } from './security';
 
-// Simplified configuration - no environment variables needed
-// Everything uses sensible defaults
+// 絶対的ルール: 環境変数必須、フォールバック厳禁
+
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    console.error(`FATAL: Required environment variable ${key} is not set`);
+    console.error('Please set all required environment variables before starting');
+    process.exit(1);
+  }
+  return value;
+}
+
+function getRequiredEnvInt(key: string): number {
+  const value = getRequiredEnv(key);
+  const parsed = parseInt(value);
+  if (isNaN(parsed)) {
+    console.error(`FATAL: Environment variable ${key}=${value} is not a valid integer`);
+    process.exit(1);
+  }
+  return parsed;
+}
 
 function getOrCreateSessionSecret(): string {
   // テスト環境では固定値を使用
@@ -14,8 +33,8 @@ function getOrCreateSessionSecret(): string {
     return 'test-session-secret-32-chars-long';
   }
 
-  // Save session secret in workspace directory (user's current directory)
-  const secretPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-session-secret');
+  // Save session secret in workspace directory (環境変数必須)
+  const secretPath = path.resolve(getRequiredEnv('VIBE_CODER_WORKSPACE_PATH'), '.vibe-coder-session-secret');
 
   // Try to read existing secret
   try {
@@ -53,8 +72,8 @@ function getOrCreateTotpSecret(): string {
     return 'JBSWY3DPEHPK3PXP'; // 固定のTOTP秘密鍵
   }
 
-  // Save TOTP secret in workspace directory (user's current directory)
-  const secretPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-totp-secret');
+  // Save TOTP secret in workspace directory (環境変数必須)
+  const secretPath = path.resolve(getRequiredEnv('VIBE_CODER_WORKSPACE_PATH'), '.vibe-coder-totp-secret');
 
   // Try to read existing secret
   try {
@@ -98,8 +117,8 @@ function getOrCreateHostId(): string {
     return '12345678'; // 固定のHost ID
   }
 
-  // Save Host ID in workspace directory (user's current directory)
-  const hostIdPath = path.resolve(process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace', '.vibe-coder-host-id');
+  // Save Host ID in workspace directory (環境変数必須)
+  const hostIdPath = path.resolve(getRequiredEnv('VIBE_CODER_WORKSPACE_PATH'), '.vibe-coder-host-id');
 
   // Try to read existing Host ID
   try {
@@ -133,9 +152,9 @@ function getOrCreateHostId(): string {
 
 function createDefaultConfig(): HostConfig {
   return {
-    port: process.env.NODE_ENV === 'development' ? 8081 : (process.env.PORT ? parseInt(process.env.PORT) : 8080),
-    claudeConfigPath: process.env.NODE_ENV === 'development' ? process.cwd() + '/.claude' : '/app/.claude',
-    signalingUrl: process.env.NODE_ENV === 'development' ? 'http://localhost:5174/api/signal' : 'https://www.vibe-coder.space/api/signal',
+    port: getRequiredEnvInt('VIBE_CODER_PORT'),
+    claudeConfigPath: getRequiredEnv('VIBE_CODER_CLAUDE_PATH'),
+    signalingUrl: getRequiredEnv('VIBE_CODER_SIGNALING_URL'),
     sessionSecret: getOrCreateSessionSecret(),
     totpSecret: getOrCreateTotpSecret(),
     maxConcurrentSessions: 10,

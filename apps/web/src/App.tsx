@@ -136,15 +136,13 @@ const initialState: AppState = {
 };
 
 const App: React.FC = () => {
-  // Server URLs configuration
-  const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
-    (process.env.NODE_ENV === 'production' 
-      ? 'https://www.vibe-coder.space' 
-      : 'http://localhost:5174');
-  const HOST_SERVER_URL = import.meta.env.VITE_HOST_SERVER_URL ||
-    (process.env.NODE_ENV === 'production'
-      ? 'https://host.vibe-coder.space'
-      : `http://localhost:${import.meta.env.VITE_HOST_PORT || '8080'}`);
+  // Server URLs configuration - Runtime environment detection
+  const SIGNALING_SERVER_URL = window.location.origin.includes('localhost') 
+    ? 'http://localhost:5174'
+    : 'https://www.vibe-coder.space';
+  const HOST_SERVER_URL = window.location.origin.includes('localhost')
+    ? 'http://localhost:8080'
+    : 'https://host.vibe-coder.space';
 
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);

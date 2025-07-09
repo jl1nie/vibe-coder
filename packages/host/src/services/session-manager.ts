@@ -5,6 +5,14 @@ import speakeasy from 'speakeasy';
 import { generateHostId, generateSessionId } from '../../../shared/src';
 import { SessionData } from '../types';
 import { hostConfig } from '../utils/config';
+
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`FATAL: Required environment variable ${key} is not set`);
+  }
+  return value;
+}
 import logger from '../utils/logger';
 
 export class SessionManager {
@@ -33,7 +41,7 @@ export class SessionManager {
 
     // Save to file
     const hostIdPath = path.resolve(
-      process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace',
+      getRequiredEnv('VIBE_CODER_WORKSPACE_PATH'),
       '.vibe-coder-host-id'
     );
 
@@ -41,7 +49,7 @@ export class SessionManager {
       fs.writeFileSync(hostIdPath, newHostId, { mode: 0o600 });
       
       // Update HOST_ID.txt file for user visibility
-      const workspaceDir = process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace';
+      const workspaceDir = getRequiredEnv('VIBE_CODER_WORKSPACE_PATH');
       const hostIdFile = `${workspaceDir}/HOST_ID.txt`;
       const hostIdContent = `Vibe Coder Host ID: ${newHostId}\n\nUse this ID to connect from your mobile device.\nURL: https://www.vibe-coder.space\n\nGenerated: ${new Date().toISOString()}\n`;
       

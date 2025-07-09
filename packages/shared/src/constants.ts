@@ -1,5 +1,14 @@
-export const SIGNALING_SERVER_URL = 'https://signal.vibe-coder.space';
-export const PWA_URL = 'https://vibe-coder.space';
+function getRequiredEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`FATAL: Required environment variable ${key} is not set`);
+  }
+  return value;
+}
+
+export const SIGNALING_SERVER_URL = getRequiredEnv('VIBE_CODER_SIGNALING_URL');
+export const PWA_URL = getRequiredEnv('VIBE_CODER_PWA_URL');
+export const HOST_URL = getRequiredEnv('VIBE_CODER_HOST_URL');
 
 export const WEBRTC_CONFIG = {
   iceServers: [
