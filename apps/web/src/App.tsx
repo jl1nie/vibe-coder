@@ -15,7 +15,6 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import QRCode from 'qrcode';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 // Web Speech API type declarations
@@ -92,8 +91,6 @@ interface AuthState {
   status: AuthStatus;
   hostId: string;
   sessionId: string | null;
-  totpSecret: string | null;
-  qrCodeUrl: string | null;
   jwt: string | null;
   error: string | null;
   totpInput: string;
@@ -131,8 +128,6 @@ const initialState: AppState = {
     status: 'unauthenticated',
     hostId: '',
     sessionId: null,
-    totpSecret: null,
-    qrCodeUrl: null,
     jwt: null,
     error: null,
     totpInput: '',
@@ -724,15 +719,18 @@ const App: React.FC = () => {
         auth: { ...prev.auth, error: null },
       }));
 
-      // Create session with host server
+      // Create session with host server - now requires Host ID validation
       const response = await fetch(`${HOST_SERVER_URL}/api/auth/sessions`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostId: state.auth.hostId }),
       });
 
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error(
-            'Host IDが見つかりません。正しい8桁の数字を入力してください'
+            'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
+            'ホストサーバーでの2FA設定が必要です。ホストマシンから http://localhost:8080/setup にアクセスしてください。'
           );
         } else if (response.status === 500) {
           throw new Error('ホストサーバーに接続できません');
@@ -743,25 +741,13 @@ const App: React.FC = () => {
 
       const data = await response.json();
 
-      // Generate QR Code for TOTP
-      const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${data.totpSecret}&issuer=Vibe%20Coder`;
-      const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      });
-
+      // Go directly to TOTP input (no QR code generation on PWA side)
       setState(prev => ({
         ...prev,
         auth: {
           ...prev.auth,
           status: 'entering_totp',
           sessionId: data.sessionId,
-          totpSecret: data.totpSecret,
-          qrCodeUrl: qrCodeDataUrl,
           totpInput: '', // Clear TOTP input
         },
       }));
@@ -791,13 +777,16 @@ const App: React.FC = () => {
           `${HOST_SERVER_URL}/api/auth/sessions`,
           {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hostId: state.auth.hostId }),
           }
         );
 
         if (!sessionResponse.ok) {
           if (sessionResponse.status === 404) {
             throw new Error(
-              'Host IDが見つかりません。正しい8桁の数字を入力してください'
+              'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
+              'ホストサーバーでの2FA設定が必要です。ホストマシンから http://localhost:8080/setup にアクセスしてください。'
             );
           } else if (sessionResponse.status === 500) {
             throw new Error('ホストサーバーに接続できません');
@@ -809,24 +798,12 @@ const App: React.FC = () => {
         const sessionData = await sessionResponse.json();
         console.log('Session created:', sessionData);
 
-        // Generate QR Code for TOTP
-        const totpUrl = `otpauth://totp/Vibe%20Coder:${state.auth.hostId}?secret=${sessionData.totpSecret}&issuer=Vibe%20Coder`;
-        const qrCodeDataUrl = await QRCode.toDataURL(totpUrl, {
-          width: 256,
-          margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#ffffff',
-          },
-        });
-
+        // No QR code generation - PWA assumes 2FA is already set up on host
         setState(prev => ({
           ...prev,
           auth: {
             ...prev.auth,
             sessionId: sessionData.sessionId,
-            totpSecret: sessionData.totpSecret,
-            qrCodeUrl: qrCodeDataUrl,
           },
         }));
       }
@@ -850,8 +827,6 @@ const App: React.FC = () => {
             auth: {
               ...prev.auth,
               sessionId: null,
-              totpSecret: null,
-              qrCodeUrl: null,
               totpInput: '', // Clear TOTP input
             },
           }));
@@ -1054,22 +1029,12 @@ const App: React.FC = () => {
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">2FA認証</h2>
               <p className="text-sm opacity-80 mb-4">
-                QRコードをAuthenticatorアプリでスキャンしてください
+                Authenticatorアプリから6桁の認証コードを入力してください
               </p>
-
-              {state.auth.qrCodeUrl && (
-                <div className="bg-white/10 rounded-lg p-4 mb-4 flex flex-col items-center">
-                  <img
-                    src={state.auth.qrCodeUrl}
-                    alt="TOTP QR Code"
-                    className="w-48 h-48 mb-3"
-                  />
-                  <p className="text-xs opacity-70 mb-2">手動入力用秘密鍵:</p>
-                  <p className="font-mono text-xs break-all select-all bg-white/5 rounded p-2 w-full">
-                    {state.auth.totpSecret}
-                  </p>
-                </div>
-              )}
+              <p className="text-xs opacity-60">
+                2FA設定がまだの場合は、ホストマシンから<br />
+                http://localhost:8080/setup にアクセスしてください
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -1114,8 +1079,6 @@ const App: React.FC = () => {
                       ...prev.auth,
                       status: 'entering_host_id',
                       error: null,
-                      totpSecret: null,
-                      qrCodeUrl: null,
                       sessionId: null,
                       totpInput: '', // Clear TOTP input
                     },
