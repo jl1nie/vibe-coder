@@ -8,18 +8,26 @@ export function createAuthRouter(sessionManager: SessionManager): Router {
   const router = Router();
   const sessionValidation = createSessionValidationMiddleware(sessionManager);
 
+  // Helper function to check if request is from localhost
+  const isLocalhostRequest = (req: any): boolean => {
+    const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+    const forwardedFor = req.get('x-forwarded-for');
+    
+    return clientIp === '127.0.0.1' || 
+           clientIp === '::1' || 
+           clientIp === '::ffff:127.0.0.1' ||
+           clientIp?.startsWith('127.') ||
+           (!forwardedFor && clientIp === '::ffff:172.') || // Docker internal
+           (!forwardedFor && clientIp?.startsWith('192.168.'));
+  };
+
   // Localhost-only 2FA setup route (requires physical access to host)
   router.get('/setup', asyncHandler(async (req, res) => {
     const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
     const forwardedFor = req.get('x-forwarded-for');
     
     // Check if request is from localhost
-    const isLocalhost = clientIp === '127.0.0.1' || 
-                       clientIp === '::1' || 
-                       clientIp === '::ffff:127.0.0.1' ||
-                       clientIp?.startsWith('127.') ||
-                       (!forwardedFor && clientIp === '::ffff:172.') || // Docker internal
-                       (!forwardedFor && clientIp?.startsWith('192.168.'));
+    const isLocalhost = isLocalhostRequest(req);
     
     if (!isLocalhost) {
       logger.warn('Unauthorized access attempt to 2FA setup', { 
@@ -50,6 +58,46 @@ export function createAuthRouter(sessionManager: SessionManager): Router {
         '4. Enter the 6-digit code from your authenticator'
       ]
     });
+  }));
+
+  // Renew Host ID (localhost only)
+  router.post('/renew-host-id', asyncHandler(async (req, res) => {
+    const isLocalhost = isLocalhostRequest(req);
+    
+    if (!isLocalhost) {
+      logger.warn('Unauthorized access attempt to renew Host ID', { 
+        clientIp: req.ip,
+        userAgent: req.get('User-Agent') 
+      });
+      return res.status(403).json({ 
+        error: 'Access denied. Host ID renewal requires physical access to the host machine.' 
+      });
+    }
+
+    try {
+      const newHostId = sessionManager.renewHostId();
+      
+      logger.info('Host ID renewed via API', { 
+        newHostId,
+        ip: req.ip 
+      });
+      
+      res.json({
+        success: true,
+        newHostId,
+        message: 'Host ID has been renewed successfully. All previous sessions have been invalidated.',
+        warning: 'You will need to reconnect all mobile devices with the new Host ID.'
+      });
+    } catch (error) {
+      logger.error('Failed to renew Host ID via API', { 
+        error: (error as Error).message,
+        ip: req.ip 
+      });
+      
+      res.status(500).json({ 
+        error: 'Failed to renew Host ID. Please try again.' 
+      });
+    }
   }));
 
   // Create new session - now requires pre-authorized Host ID

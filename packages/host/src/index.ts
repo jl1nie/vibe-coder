@@ -201,12 +201,29 @@ class VibeCoderHost {
               border-radius: 5px; 
               cursor: pointer; 
               font-size: 16px; 
-              margin: 20px 0; 
+              margin: 20px 5px; 
             }
             #setupButton:hover { 
               background: #0056b3; 
             }
             #setupButton:disabled { 
+              background: #6c757d; 
+              cursor: not-allowed; 
+            }
+            #renewButton { 
+              background: #dc3545; 
+              color: white; 
+              border: none; 
+              padding: 12px 24px; 
+              border-radius: 5px; 
+              cursor: pointer; 
+              font-size: 16px; 
+              margin: 20px 5px; 
+            }
+            #renewButton:hover { 
+              background: #c82333; 
+            }
+            #renewButton:disabled { 
               background: #6c757d; 
               cursor: not-allowed; 
             }
@@ -251,6 +268,7 @@ class VibeCoderHost {
 
             <div style="text-align: center;">
               <button id="setupButton" onclick="generateSetup()">Generate 2FA Setup</button>
+              <button id="renewButton" onclick="renewHostId()">Renew Host ID</button>
             </div>
 
             <div id="setupResult"></div>
@@ -307,6 +325,75 @@ class VibeCoderHost {
               } finally {
                 button.disabled = false;
                 button.textContent = 'Generate New 2FA Setup';
+              }
+            }
+
+            async function renewHostId() {
+              const button = document.getElementById('renewButton');
+              const resultDiv = document.getElementById('setupResult');
+              
+              if (!confirm('Are you sure you want to renew the Host ID? This will invalidate all existing sessions and require all mobile devices to reconnect with the new Host ID.')) {
+                return;
+              }
+              
+              button.disabled = true;
+              button.textContent = 'Renewing...';
+
+              try {
+                const response = await fetch('/api/auth/renew-host-id', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                  resultDiv.innerHTML = \`
+                    <div class="success">
+                      <h3>✅ Host ID Renewed</h3>
+                      <p><strong>New Host ID: \${data.newHostId}</strong></p>
+                      <p>\${data.message}</p>
+                      <div class="error" style="margin-top: 10px;">
+                        <strong>⚠️ Warning:</strong> \${data.warning}
+                      </div>
+                    </div>
+                  \`;
+                  
+                  // Update the Host ID display on the page
+                  const hostIdElements = document.querySelectorAll('.host-id');
+                  hostIdElements.forEach(element => {
+                    element.textContent = 'Host ID: ' + data.newHostId;
+                  });
+                  
+                  // Update the instructions
+                  const instructionElements = document.querySelectorAll('strong');
+                  instructionElements.forEach(element => {
+                    if (element.textContent.match(/\\d{8}/)) {
+                      element.textContent = data.newHostId;
+                    }
+                  });
+                  
+                  // Refresh the page after 3 seconds to update all Host ID references
+                  setTimeout(() => {
+                    location.reload();
+                  }, 3000);
+                } else {
+                  resultDiv.innerHTML = \`
+                    <div class="error">
+                      <h3>❌ Error</h3>
+                      <p>\${data.error}</p>
+                    </div>
+                  \`;
+                }
+              } catch (error) {
+                resultDiv.innerHTML = \`
+                  <div class="error">
+                    <h3>❌ Connection Error</h3>
+                    <p>Failed to connect to server: \${error.message}</p>
+                  </div>
+                \`;
+              } finally {
+                button.disabled = false;
+                button.textContent = 'Renew Host ID';
               }
             }
           </script>

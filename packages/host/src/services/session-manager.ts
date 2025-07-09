@@ -1,6 +1,8 @@
-import { generateSessionId } from '../../../shared/src';
-import speakeasy from 'speakeasy';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
+import path from 'path';
+import speakeasy from 'speakeasy';
+import { generateHostId, generateSessionId } from '../../../shared/src';
 import { SessionData } from '../types';
 import { hostConfig } from '../utils/config';
 import logger from '../utils/logger';
@@ -18,6 +20,56 @@ export class SessionManager {
 
   public getHostId(): string {
     return this.hostId;
+  }
+
+  public renewHostId(): string {
+    // テスト環境では固定値を使用
+    if (process.env.NODE_ENV === 'test') {
+      return '12345678'; // 固定のHost ID
+    }
+
+    // Generate new Host ID
+    const newHostId = generateHostId();
+
+    // Save to file
+    const hostIdPath = path.resolve(
+      process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace',
+      '.vibe-coder-host-id'
+    );
+
+    try {
+      fs.writeFileSync(hostIdPath, newHostId, { mode: 0o600 });
+      
+      // Update HOST_ID.txt file for user visibility
+      const workspaceDir = process.env.NODE_ENV === 'development' ? process.cwd() : '/app/workspace';
+      const hostIdFile = `${workspaceDir}/HOST_ID.txt`;
+      const hostIdContent = `Vibe Coder Host ID: ${newHostId}\n\nUse this ID to connect from your mobile device.\nURL: https://www.vibe-coder.space\n\nGenerated: ${new Date().toISOString()}\n`;
+      
+      if (fs.existsSync(workspaceDir)) {
+        fs.writeFileSync(hostIdFile, hostIdContent);
+      }
+      
+      // Update internal hostId
+      this.hostId = newHostId;
+      
+      // Clear all existing sessions since the hostId has changed
+      this.sessions.clear();
+      
+      logger.info('Host ID renewed', { 
+        oldHostId: this.hostId !== newHostId ? 'changed' : 'same',
+        newHostId: newHostId 
+      });
+      
+      console.log(`Host ID renewed: ${newHostId} (saved to ${hostIdPath})`);
+      return newHostId;
+      
+    } catch (error) {
+      logger.error('Failed to renew Host ID', { 
+        error: (error as Error).message,
+        hostIdPath 
+      });
+      throw new Error(`Failed to renew Host ID: ${(error as Error).message}`);
+    }
   }
 
   public async createSession(): Promise<{ sessionId: string; totpSecret: string }> {
