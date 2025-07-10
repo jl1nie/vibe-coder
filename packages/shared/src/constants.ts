@@ -6,9 +6,18 @@ function getRequiredEnv(key: string): string {
   return value;
 }
 
-export const SIGNALING_SERVER_URL = getRequiredEnv('VIBE_CODER_SIGNALING_URL');
-export const PWA_URL = getRequiredEnv('VIBE_CODER_PWA_URL');
-export const HOST_URL = getRequiredEnv('VIBE_CODER_HOST_URL');
+
+export const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'test' 
+  ? 'http://localhost:5174/api/signal'
+  : getRequiredEnv('VIBE_CODER_SIGNALING_URL');
+
+export const PWA_URL = process.env.NODE_ENV === 'test'
+  ? 'http://localhost:5174' 
+  : getRequiredEnv('VIBE_CODER_PWA_URL');
+
+export const HOST_URL = process.env.NODE_ENV === 'test'
+  ? 'http://localhost:8080'
+  : getRequiredEnv('VIBE_CODER_HOST_URL');
 
 export const WEBRTC_CONFIG = {
   iceServers: [

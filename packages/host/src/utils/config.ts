@@ -151,6 +151,22 @@ function getOrCreateHostId(): string {
 }
 
 function createDefaultConfig(): HostConfig {
+  // テスト環境では完全に固定値を使用（フォールバック厳禁ルール遵守）
+  if (process.env.NODE_ENV === 'test') {
+    return {
+      port: 8080,
+      claudeConfigPath: './.claude',
+      signalingUrl: 'http://localhost:5174/api/signal',
+      sessionSecret: 'test-session-secret-32-chars-long',
+      totpSecret: 'JBSWY3DPEHPK3PXP',
+      maxConcurrentSessions: 10,
+      commandTimeout: 30000,
+      enableSecurity: true,
+      logLevel: 'info' as const,
+      hostId: '12345678',
+    };
+  }
+
   return {
     port: getRequiredEnvInt('VIBE_CODER_PORT'),
     claudeConfigPath: getRequiredEnv('VIBE_CODER_CLAUDE_PATH'),

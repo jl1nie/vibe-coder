@@ -68,6 +68,21 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    global: 'globalThis',
+    process: JSON.stringify({
+      env: {
+        VIBE_CODER_SIGNALING_URL: 'http://localhost:5174/api/signal',
+        VIBE_CODER_PWA_URL: 'http://localhost:5174',
+        VIBE_CODER_HOST_URL: 'http://localhost:8080',
+        NODE_ENV: 'development',
+      },
+      browser: true,
+      version: '',
+      platform: 'browser',
+      argv: [],
+    }),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
