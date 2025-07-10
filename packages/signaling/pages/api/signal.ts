@@ -55,7 +55,7 @@ export default async function handler(
         message: 'Session created successfully',
       });
 
-    case 'offer':
+    case 'offer': {
       const session = sessions.get(sessionId);
       if (session) {
         session.offer = req.body.offer;
@@ -68,8 +68,9 @@ export default async function handler(
         success: false,
         error: 'Session not found',
       });
+    }
 
-    case 'answer':
+    case 'answer': {
       const answerSession = sessions.get(sessionId);
       if (answerSession) {
         answerSession.answer = req.body.answer;
@@ -82,8 +83,9 @@ export default async function handler(
         success: false,
         error: 'Session not found',
       });
+    }
 
-    case 'get-offer':
+    case 'get-offer': {
       const offerSession = sessions.get(sessionId);
       if (offerSession && offerSession.offer) {
         return res.status(200).json({
@@ -95,8 +97,9 @@ export default async function handler(
         success: false,
         error: 'Offer not found',
       });
+    }
 
-    case 'get-answer':
+    case 'get-answer': {
       const getAnswerSession = sessions.get(sessionId);
       if (getAnswerSession && getAnswerSession.answer) {
         return res.status(200).json({
@@ -108,8 +111,9 @@ export default async function handler(
         success: false,
         error: 'Answer not found',
       });
+    }
 
-    case 'candidate':
+    case 'candidate': {
       const candidateSession = sessions.get(sessionId);
       if (candidateSession) {
         if (!candidateSession.candidates[hostId]) {
@@ -125,8 +129,9 @@ export default async function handler(
         success: false,
         error: 'Session not found',
       });
+    }
 
-    case 'get-candidate':
+    case 'get-candidate': {
       const getCandidateSession = sessions.get(sessionId);
       if (getCandidateSession) {
         // Return candidates from other hosts (not the requesting host)
@@ -143,6 +148,7 @@ export default async function handler(
         success: false,
         error: 'Session not found',
       });
+    }
 
     default:
       return res.status(400).json({
