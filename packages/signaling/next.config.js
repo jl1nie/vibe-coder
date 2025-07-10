@@ -3,6 +3,11 @@ const nextConfig = {
   reactStrictMode: true,
   trailingSlash: false,
   
+  // Disable static optimization for error pages to avoid Html import issues
+  experimental: {
+    forceSwcTransforms: true,
+  },
+  
   // Static file serving from public directory
   assetPrefix: '',
   
