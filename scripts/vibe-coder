@@ -73,7 +73,7 @@ setup_env() {
     set +a
     
     # 必須環境変数の確認
-    local required_vars=("VIBE_CODER_PORT" "VIBE_CODER_PWA_URL" "VIBE_CODER_SIGNALING_URL" "VIBE_CODER_CLAUDE_PATH" "VIBE_CODER_WORKSPACE_PATH")
+    local required_vars=("VIBE_CODER_PORT" "VIBE_CODER_PWA_URL" "VIBE_CODER_SIGNALING_URL" "VIBE_CODER_HOST_URL" "VIBE_CODER_CLAUDE_PATH" "VIBE_CODER_WORKSPACE_PATH")
     
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
@@ -163,6 +163,10 @@ start_dev_local() {
     
     # Host Server起動 (Docker)
     log_info "Starting host server (Docker) on port 8080..."
+    
+    # 環境変数を明示的に設定
+    export HOST_UID HOST_GID NODE_ENV VIBE_CODER_PORT VIBE_CODER_PWA_URL VIBE_CODER_SIGNALING_URL VIBE_CODER_HOST_URL VIBE_CODER_CLAUDE_PATH VIBE_CODER_WORKSPACE_PATH
+    
     docker compose -f docker-compose.yml build
     docker compose -f docker-compose.yml up -d
     
@@ -246,6 +250,9 @@ case "$1" in
     check_requirements
     
     # Build and start
+    # 環境変数を明示的に設定
+    export HOST_UID HOST_GID NODE_ENV VIBE_CODER_PORT VIBE_CODER_PWA_URL VIBE_CODER_SIGNALING_URL VIBE_CODER_HOST_URL VIBE_CODER_CLAUDE_PATH VIBE_CODER_WORKSPACE_PATH
+    
     docker compose -f docker-compose.yml build
     if [[ "$2" == "-d" ]]; then
       docker compose -f docker-compose.yml up -d

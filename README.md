@@ -153,7 +153,8 @@ pnpm install
 
 ```bash
 # 推奨: スクリプト経由で起動（最も簡単）
-./scripts/vibe-coder start
+./scripts/vibe-coder start    # プロダクション（Vercel PWA）
+./scripts/vibe-coder dev      # 開発モード（ローカルPWA）
 
 # 手動Docker実行
 docker run -d \
@@ -162,6 +163,13 @@ docker run -d \
   -v $(pwd):/workspace \
   jl1nie/vibe-coder:latest
 ```
+
+### 開発モード vs プロダクション
+
+| モード | PWA | Host | 用途 |
+|--------|-----|------|------|
+| **プロダクション** | https://vibe-coder.space | Docker:8080 | 一般使用 |
+| **開発** | localhost:5174 | Docker:8080 | ローカルテスト |
 
 ## 🔧 トラブルシューティング
 

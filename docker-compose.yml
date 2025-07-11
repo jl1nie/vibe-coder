@@ -12,10 +12,17 @@ services:
       # 現在の作業ディレクトリをマウント（vibe-coderファイルの永続化用）
       - .:/app/workspace
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
       - CLAUDE_CONFIG_PATH=/app/.claude
       - HOST_UID=${HOST_UID}
       - HOST_GID=${HOST_GID}
+      # Vibe Coder configuration
+      - VIBE_CODER_PORT=${VIBE_CODER_PORT:-8080}
+      - VIBE_CODER_PWA_URL=${VIBE_CODER_PWA_URL}
+      - VIBE_CODER_SIGNALING_URL=${VIBE_CODER_SIGNALING_URL}
+      - VIBE_CODER_HOST_URL=${VIBE_CODER_HOST_URL}
+      - VIBE_CODER_CLAUDE_PATH=${VIBE_CODER_CLAUDE_PATH:-/usr/local/bin/claude}
+      - VIBE_CODER_WORKSPACE_PATH=${VIBE_CODER_WORKSPACE_PATH:-/app/workspace}
       # インタラクティブモードを有効化
       - TERM=xterm-256color
       - COLUMNS=120
