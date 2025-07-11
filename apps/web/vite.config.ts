@@ -1,9 +1,12 @@
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  return {
   plugins: [
     react(),
     VitePWA({
@@ -72,10 +75,11 @@ export default defineConfig({
     global: 'globalThis',
     process: JSON.stringify({
       env: {
-        VIBE_CODER_SIGNALING_URL: 'http://localhost:5174/api/signal',
-        VIBE_CODER_PWA_URL: 'http://localhost:5174',
-        VIBE_CODER_HOST_URL: 'http://localhost:8080',
-        NODE_ENV: 'development',
+        VIBE_CODER_SIGNALING_URL: env.VIBE_CODER_SIGNALING_URL,
+        VIBE_CODER_PWA_URL: env.VIBE_CODER_PWA_URL,
+        VIBE_CODER_HOST_URL: env.VIBE_CODER_HOST_URL,
+        VIBE_CODER_HOST_DISCOVERY_URL: env.VIBE_CODER_HOST_DISCOVERY_URL,
+        NODE_ENV: env.NODE_ENV,
       },
       browser: true,
       version: '',
@@ -119,4 +123,5 @@ export default defineConfig({
     host: true,
     strictPort: true,
   },
+  };
 });
