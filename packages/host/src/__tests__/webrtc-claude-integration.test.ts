@@ -16,6 +16,14 @@ vi.mock('simple-peer', () => ({
   default: vi.fn(() => mockPeer),
 }));
 
+// Mock wrtc module for Node.js WebRTC support
+vi.mock('wrtc', () => ({
+  RTCPeerConnection: vi.fn(),
+  RTCSessionDescription: vi.fn(),
+  RTCIceCandidate: vi.fn(),
+  RTCDataChannel: vi.fn(),
+}));
+
 // Mock ClaudeInteractiveService
 vi.mock('../services/claude-interactive-service');
 

@@ -29,10 +29,21 @@ export class WebRTCService {
     
     logger.info('Creating WebRTC connection', { sessionId, connectionId });
 
+    // Import wrtc dynamically to avoid TypeScript module resolution issues
+    let wrtc: any;
+    try {
+      wrtc = require('wrtc');
+    } catch (error) {
+      logger.warn('wrtc module not available, WebRTC may not work in Node.js environment', {
+        error: (error as Error).message
+      });
+    }
+
     // Simple Peer インスタンスを作成（ホスト側はinitiator: false - クライアントがofferを送る）
     const peer = new SimplePeer({
       initiator: false,
       trickle: true,
+      wrtc: wrtc, // Node.js WebRTC implementation
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' }
