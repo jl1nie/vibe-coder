@@ -29,30 +29,21 @@ log_error() {
 
 # Function to print usage information
 usage() {
-  echo "Vibe Coder Management Script"
+  echo "Vibe Coder - Mobile Development Environment"
   echo
-  echo "Usage: $0 {start|stop|logs|status|clean|dev|prod|setup|host-id|test|e2e} [options]"
+  echo "Usage: $0 {start|dev|stop|logs|status|host-id|clean} [options]"
   echo
   echo "Commands:"
-  echo "  start   : Start Vibe Coder in production mode"
-  echo "  dev     : Start in development mode (環境変数: .env.development)"
-  echo "  prod    : Start in production mode (環境変数: .env.production)"
-  echo "  stop    : Stop all services"
-  echo "  logs    : Follow the logs of the services"
-  echo "  status  : Show service status and health"
-  echo "  host-id : Show or check the Host ID for connection"
-  echo "  clean   : Stop services and remove containers/images"
-  echo "  setup   : Setup environment and check configuration"
-  echo "  test    : Run unit and integration tests (dev mode only)"
-  echo "  e2e     : Run end-to-end tests (dev mode only)"
+  echo "  start   : Start Vibe Coder host server"
+  echo "  dev     : Start in local development mode"
+  echo "  stop    : Stop host server"
+  echo "  logs    : Show server logs"
+  echo "  status  : Show server status"
+  echo "  host-id : Show connection Host ID"
+  echo "  clean   : Stop and remove all containers"
   echo
-  echo "Developer Options:"
-  echo "  dev --local : Start in local development mode (no Docker)"
-  echo "  dev --docker: Start in Docker development mode"
-  echo
-  echo "Environment Variables:"
-  echo "  HOST_UID/HOST_GID - Auto-detected from current user"
-  echo "  Mode-specific env files: .env.development, .env.production"
+  echo "Options:"
+  echo "  -d      : Run in background (detached mode)"
 }
 
 # 環境設定（モード別）
@@ -155,77 +146,82 @@ show_startup_info() {
     show_host_id
 }
 
-# 開発者向けローカル起動
+# ローカル開発モード起動
 start_dev_local() {
     log_info "Starting Vibe Coder in local development mode..."
     setup_env "development"
     
     # 既存プロセス終了
     log_info "Stopping existing processes..."
-    ps aux | grep "node.*vibe-coder" | grep -v grep | awk '{print $2}' | xargs -r kill 2>/dev/null || true
-    docker ps | grep vibe-coder-host && docker stop vibe-coder-host || true
+    pkill -f "next dev.*5174" 2>/dev/null || true
+    pkill -f "node.*vibe-coder.*host" 2>/dev/null || true
+    sleep 2
     
-    # ビルド（環境変数変更を反映するため強制re-build）
-    log_info "Building packages with environment variables..."
-    pnpm build --force
+    # ビルド
+    log_info "Building packages..."
+    pnpm build
     
-    # ホストサーバー起動
-    log_info "Starting host server on port $VIBE_CODER_PORT..."
-    cd packages/host
-    env \
-        VIBE_CODER_PORT="$VIBE_CODER_PORT" \
-        VIBE_CODER_WORKSPACE_PATH="$VIBE_CODER_WORKSPACE_PATH" \
-        VIBE_CODER_SIGNALING_URL="$VIBE_CODER_SIGNALING_URL" \
-        VIBE_CODER_CLAUDE_PATH="$VIBE_CODER_CLAUDE_PATH" \
-        VIBE_CODER_PWA_URL="$VIBE_CODER_PWA_URL" \
-        pnpm start &
-    HOST_PID=$!
-    cd ../..
+    # Host Server起動 (Docker)
+    log_info "Starting host server (Docker) on port 8080..."
+    docker compose -f docker-compose.yml build
+    docker compose -f docker-compose.yml up -d
     
-    # シグナリングサーバー起動
-    log_info "Starting signaling server on port $VIBE_CODER_PWA_PORT..."
+    # Signaling + PWA Server起動 (ローカル)
+    log_info "Starting signaling + PWA server on port 5174..."
     cd packages/signaling
-    env \
-        VIBE_CODER_PWA_PORT="$VIBE_CODER_PWA_PORT" \
-        VIBE_CODER_SIGNALING_URL="$VIBE_CODER_SIGNALING_URL" \
-        pnpm dev:vercel &
+    pnpm dev &
     SIGNALING_PID=$!
     cd ../..
     
     # 起動確認
     log_info "Waiting for services to start..."
-    sleep 10
     
-    if curl -s http://localhost:$VIBE_CODER_PORT/api/health > /dev/null 2>&1; then
-        log_success "Host server is running on port $VIBE_CODER_PORT"
-    else
-        log_error "Host server failed to start"
-        kill $HOST_PID $SIGNALING_PID 2>/dev/null || true
-        exit 1
-    fi
+    # Host Server確認
+    for i in {1..30}; do
+        if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
+            log_success "Host server is running on port 8080"
+            break
+        fi
+        sleep 2
+        if [ $i -eq 30 ]; then
+            log_error "Host server failed to start within 60 seconds"
+            kill $SIGNALING_PID 2>/dev/null || true
+            exit 1
+        fi
+    done
     
-    if curl -s http://localhost:$VIBE_CODER_PWA_PORT > /dev/null 2>&1; then
-        log_success "PWA server is running on port $VIBE_CODER_PWA_PORT"
-    else
-        log_error "PWA server failed to start"
-        kill $HOST_PID $SIGNALING_PID 2>/dev/null || true
-        exit 1
-    fi
+    # Signaling Server確認
+    for i in {1..15}; do
+        if curl -s http://localhost:5174 > /dev/null 2>&1; then
+            log_success "Signaling + PWA server is running on port 5174"
+            break
+        fi
+        sleep 2
+        if [ $i -eq 15 ]; then
+            log_error "Signaling server failed to start within 30 seconds"
+            kill $SIGNALING_PID 2>/dev/null || true
+            exit 1
+        fi
+    done
     
-    log_success "Local development environment started!"
     echo
     echo "╔════════════════════════════════════════╗"
-    echo "║          DEVELOPMENT MODE              ║"
+    echo "║          LOCAL TEST MODE               ║"
     echo "║                                        ║"
-    echo "║  Host Server: http://localhost:$VIBE_CODER_PORT     ║"
-    echo "║  PWA Server:  http://localhost:$VIBE_CODER_PWA_PORT     ║"
+    echo "║  Host Server: http://localhost:8080    ║"
+    echo "║  PWA Client:  http://localhost:5174    ║"
+    echo "║                                        ║"
+    echo "║  1. Open http://localhost:5174         ║"
+    echo "║  2. Enter Host ID shown below          ║"
+    echo "║  3. Complete 2FA authentication        ║"
     echo "║                                        ║"
     echo "║  Press Ctrl+C to stop all services    ║"
     echo "╚════════════════════════════════════════╝"
     echo
+    show_host_id
     
     # プロセス終了時のクリーンアップ
-    trap 'log_info "Stopping services..."; kill $HOST_PID $SIGNALING_PID 2>/dev/null || true; exit 0' INT
+    trap 'log_info "Stopping services..."; kill $SIGNALING_PID 2>/dev/null || true; docker compose down; exit 0' INT
     
     # フォアグラウンドで待機
     wait
@@ -244,52 +240,30 @@ cd "$(dirname "$0")/.."
 
 # Subcommand handling
 case "$1" in
-  start|prod)
-    log_info "Starting Vibe Coder in production mode..."
+  start)
+    log_info "Starting Vibe Coder host server..."
     setup_env "production"
     check_requirements
-    if [[ "$2" == "--no-build" ]]; then
-      if [[ "$3" == "-d" || "$4" == "-d" ]]; then
-        docker compose -f docker-compose.yml up --build -d
-      else
-        docker compose -f docker-compose.yml up --build
-      fi
+    
+    # Build and start
+    docker compose -f docker-compose.yml build
+    if [[ "$2" == "-d" ]]; then
+      docker compose -f docker-compose.yml up -d
     else
-      docker compose -f docker-compose.yml build
-      if [[ "$2" == "-d" || "$3" == "-d" ]]; then
-        docker compose -f docker-compose.yml up -d
-      else
-        docker compose -f docker-compose.yml up
-      fi
+      docker compose -f docker-compose.yml up
     fi
     show_startup_info
     ;;
   dev)
-    case "$2" in
-      --local)
-        start_dev_local
-        ;;
-      --docker|"")
-        log_info "Starting Vibe Coder in Docker development mode..."
-        setup_env "development"
-        check_requirements
-        export ENABLE_SECURITY=false
-        export LOG_LEVEL=debug
-        # Build once (no UID/GID needed at build time)
-        docker compose -f docker-compose.yml build
-        # Start with runtime UID/GID (passed via environment variables)
-        docker compose -f docker-compose.yml up
-        ;;
-      *)
-        log_error "Invalid dev option: $2"
-        log_info "Use: dev --local or dev --docker"
-        exit 1
-        ;;
-    esac
+    start_dev_local
     ;;
   stop)
     log_info "Stopping Vibe Coder..."
+    # Docker containers
     docker compose down
+    # Local processes
+    pkill -f "next dev.*5174" 2>/dev/null || true
+    pkill -f "node.*vibe-coder.*host" 2>/dev/null || true
     log_success "Vibe Coder stopped"
     ;;
   logs)
@@ -316,86 +290,8 @@ case "$1" in
     docker system prune -f
     log_success "Cleanup complete"
     ;;
-  setup)
-    setup_env "development"
-    check_requirements
-    log_success "Setup completed"
-    ;;
-  test)
-    log_info "Running unit and integration tests (development mode only)..."
-    setup_env "development"
-    pnpm test
-    log_success "Tests completed"
-    ;;
-  e2e)
-    log_info "Running end-to-end tests (development mode only)..."
-    setup_env "development"
-    
-    # サービスが起動しているかチェック
-    if ! curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
-        log_warn "Host server not running, starting services..."
-        
-        # バックグラウンドで起動
-        log_info "Building and starting services..."
-        pnpm build
-        pnpm --filter @vibe-coder/host start &
-        HOST_PID=$!
-        
-        # サーバー起動を待機
-        log_info "Waiting for host server to start..."
-        for i in {1..30}; do
-            if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
-                log_success "Host server is ready"
-                break
-            fi
-            sleep 2
-            echo -n "."
-        done
-        echo
-        
-        if ! curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
-            log_error "Host server failed to start within 60 seconds"
-            kill $HOST_PID 2>/dev/null || true
-            exit 1
-        fi
-    else
-        log_success "Host server is already running"
-    fi
-    
-    # PWAサーバーが起動しているかチェック
-    if ! curl -s http://localhost:5173 > /dev/null 2>&1; then
-        log_info "Starting PWA server..."
-        pnpm --filter @vibe-coder/web dev &
-        PWA_PID=$!
-        
-        # PWAサーバー起動を待機
-        log_info "Waiting for PWA server to start..."
-        for i in {1..15}; do
-            if curl -s http://localhost:5173 > /dev/null 2>&1; then
-                log_success "PWA server is ready"
-                break
-            fi
-            sleep 2
-            echo -n "."
-        done
-        echo
-        
-        if ! curl -s http://localhost:5173 > /dev/null 2>&1; then
-            log_error "PWA server failed to start within 30 seconds"
-            kill $PWA_PID 2>/dev/null || true
-            exit 1
-        fi
-    else
-        log_success "PWA server is already running"
-    fi
-    
-    # E2Eテスト実行
-    log_info "Running Playwright E2E tests..."
-    pnpm exec playwright test
-    
-    log_success "E2E tests completed"
-    ;;
   *)
+    log_error "Unknown command: $1"
     usage
     exit 1
     ;;
