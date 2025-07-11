@@ -38,6 +38,16 @@ addgroup -g $USER_GID -S vibecoder
 echo "Creating user: vibecoder (UID: $USER_UID, GID: $USER_GID)"
 adduser -S vibecoder -u $USER_UID -G vibecoder
 
+# ユーザーにディレクトリ所有権を付与
+echo "Setting ownership of application directories for vibecoder"
+chown -R $USER_UID:$USER_GID /app/.claude /app/logs /app/workspace
+# Claude CLIがルートディレクトリにアクセスする場合があるため、/appも所有権を設定
+chown $USER_UID:$USER_GID /app
+
+# ホームディレクトリを作成・設定
+mkdir -p /home/vibecoder
+chown -R $USER_UID:$USER_GID /home/vibecoder
+
 echo "Starting application as vibecoder ($USER_UID:$USER_GID)"
 
 # Claude CLIのインストール・パス・権限チェック
