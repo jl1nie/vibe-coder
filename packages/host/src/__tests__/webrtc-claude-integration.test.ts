@@ -27,7 +27,7 @@ vi.mock('wrtc', () => ({
 // Mock ClaudeInteractiveService
 vi.mock('../services/claude-interactive-service');
 
-describe('WebRTC Claude Integration', () => {
+describe('WebRTC Data Channel Communication', () => {
   let webrtcService: WebRTCService;
   let sessionManager: SessionManager;
   let claudeService: ClaudeService;
@@ -42,7 +42,7 @@ describe('WebRTC Claude Integration', () => {
     
     // Mock ClaudeInteractiveService
     mockClaudeInteractiveService = {
-      getSession: vi.fn().mockReturnValue(null), // セッションが存在しない場合
+      getSession: vi.fn().mockReturnValue(null),
       createSession: vi.fn().mockResolvedValue({
         isReady: true,
         onOutput: vi.fn(),
@@ -54,11 +54,12 @@ describe('WebRTC Claude Integration', () => {
         error: null,
         executionTime: 1500
       }),
+      getActiveSessions: vi.fn().mockReturnValue([]),
     };
     
     vi.mocked(ClaudeInteractiveService).mockImplementation(() => mockClaudeInteractiveService);
     
-    webrtcService = new WebRTCService(sessionManager, claudeService);
+    webrtcService = new WebRTCService(sessionManager);
 
     // Capture the data handler for simulating messages
     mockPeer.on.mockImplementation((event: string, handler: any) => {
