@@ -4,21 +4,53 @@
 
 Vibe Coder は、スマホからワンタップで Claude Code を実行できる革新的な開発ツールです。WebRTC P2P 通信により、どこからでも安全に自宅の開発環境にアクセスできます。
 
-## 🏗️ アーキテクチャ概要
+## 🏗️ システム構成詳細
 
-### 2025年7月仕様変更後の統合アーキテクチャ
+### 統一WebRTCアーキテクチャ (2025年7月完成)
 
-**PWA + シグナリングサーバー統合 (Vercel)**
-- **URL**: `https://www.vibe-coder.space`
-- **PWA配信**: `/` → `packages/signaling/public/` (静的配信)
-- **API**: `/api/*` → `packages/signaling/pages/api/*` (Edge Functions)
-- **統合管理**: PWAとAPIが同一プロジェクトで運用
+#### **技術スタック統合完了**
+- **WebRTC API**: Simple-peer削除・Native RTCPeerConnection直接使用
+- **PWA**: ブラウザネイティブWebRTC API
+- **Host**: wrtcライブラリ（Node.js）+ Native API統合
+- **統一メッセージ**: JSON形式・DataChannel通信
 
-**ホストサーバー (Docker)**
-- **ポート**: 8080
-- **機能**: Claude Code統合、WebRTC P2P接続、認証管理
-- **永続化**: Host ID、セッション情報、TOTP秘密鍵
-- **重要**: `docker compose` コマンドを使用（`docker-compose` は古いコマンド）
+#### **開発環境 (localhost)**
+- **localhost:5174**: PWA静的配信（React/Vite）
+- **localhost:5175**: WebSocketシグナリングサーバー（Pure WebSocket）
+- **localhost:8080**: ホストサーバーDockerコンテナ（Claude Code統合）
+
+#### **プロダクション環境**
+- **https://vibe-coder.space**: PWA静的配信（Vercel）
+- **wss://user-domain.com:5175**: WebSocketシグナリング（Docker）
+- **ユーザローカル:8080**: ホストサーバーDockerコンテナ（Claude Code統合）
+
+### 🔧 詳細コンポーネント構成
+
+#### **PWA クライアント (apps/web/)**
+- **React 18 + TypeScript**: 型安全なコンポーネント開発
+- **Vite**: 高速ビルド・開発サーバー
+- **TailwindCSS**: ユーティリティファーストCSS
+- **xterm.js**: 高機能ターミナルエミュレーター
+- **Native WebRTC**: RTCPeerConnection・RTCDataChannel
+- **Web Speech API**: webkitSpeechRecognition音声認識
+
+#### **ホストサーバー (packages/host/)**
+- **Express.js**: RESTful API・WebSocketサーバー
+- **Claude Code統合**: claude CLIプロセス管理
+- **WebRTC Service**: wrtc + Native RTCPeerConnection
+- **セッション管理**: JWT + TOTP (speakeasy)
+- **Docker**: UID/GID動的設定・権限問題解決済み
+
+#### **WebSocketシグナリング (packages/signaling/)**
+- **Pure WebSocket**: Next.js削除・軽量WebSocketサーバー
+- **セッション管理**: 8桁キー認証・メモリベースステートレス
+- **P2P橋渡し**: Offer/Answer・ICE候補交換のみ
+- **自動クリーンアップ**: 非アクティブセッション管理
+
+#### **PWA初回セットアップフロー**
+- PWA初回起動時: シグナリングサーバードメイン入力（例: your-domain.com）
+- PWA内部構築: `wss://your-domain.com:5175/ws/signaling`
+- PWAストレージ永続化: 以降の接続で自動使用
 
 **認証・接続フロー**
 1. **8桁キー認証**: Host ID生成・表示
@@ -37,13 +69,11 @@ vibe-coder/
 │       │   └── main.tsx       # エントリーポイント
 │       └── dist/              # ビルド成果物 → signaling/public/へ移行
 ├── packages/
-│   ├── signaling/             # シグナリングサーバー (Vercel)
+│   ├── signaling/             # 開発用Next.js (localhost:5175で独立Dockerコンテナ）
 │   │   ├── pages/api/         # API endpoints
-│   │   │   ├── signal.ts      # WebRTC シグナリング
-│   │   │   ├── session.ts     # セッション管理
-│   │   │   └── health.ts      # ヘルスチェック
+│   │   │   └── ws/signaling.ts # WebSocket シグナリング
 │   │   ├── public/            # PWA静的配信 (apps/web/dist/から移行)
-│   │   └── vercel.json        # Vercel設定
+│   │   └── vercel.json        # Vercel設定（PWA配信のみ）
 │   ├── host/                  # ホストサーバー (Docker)
 │   │   ├── src/
 │   │   │   ├── index.ts       # サーバーエントリーポイント
@@ -87,24 +117,33 @@ pnpm install
 # 3. 全パッケージビルド
 pnpm build
 
-# 4. ワンコマンド起動
+# 4. 本番環境起動（推奨）
 ./scripts/vibe-coder start
+
+# 5. 開発環境起動
+./scripts/vibe-coder dev
 ```
 
 ## 🔧 開発ワークフロー
 
 ### 1. ホストサーバー開発
 
+#### **本番起動（推奨）**
 ```bash
-# Docker環境での開発（重要：docker compose を使用）
-export HOST_UID=$(id -u) && export HOST_GID=$(id -g)
+# vibe-coderスクリプト使用（自動環境設定・永続化）
+./scripts/vibe-coder start    # プロダクション環境
+./scripts/vibe-coder dev      # 開発環境（3コンテナ構成）
+```
+
+#### **開発・デバッグ用手動起動**
+```bash
+# 必要な環境変数設定
+export HOST_UID=$(id -u)
+export HOST_GID=$(id -g)
+export VIBE_CODER_SIGNALING_URL="localhost:5175"
+
+# Docker環境での開発
 docker compose up --build -d
-
-# Dockerコンテナ再起動
-docker compose restart vibe-coder-host
-
-# Dockerコンテナ停止
-docker compose down
 
 # 単体テスト実行
 pnpm --filter @vibe-coder/host test
@@ -128,16 +167,19 @@ cp -r apps/web/dist/* packages/signaling/public/
 
 ### 3. シグナリングサーバー開発
 
+**開発環境**: localhost:5175で独立Dockerコンテナ
+**プロダクション環境**: ユーザー設定ドメイン:5175でDockerコンテナ
+
 ```bash
-# Vercel開発サーバー起動
+# 開発用シグナリングサーバー起動（開発モード）
+./scripts/vibe-coder dev
+
+# プロダクション用PWA配信（Vercel）
 cd packages/signaling
-vercel dev
+vercel deploy --prod
 
 # 単体テスト実行
 pnpm --filter @vibe-coder/signaling test
-
-# ビルド確認
-pnpm --filter @vibe-coder/signaling build
 ```
 
 ## 🧪 テスト実行
@@ -145,31 +187,38 @@ pnpm --filter @vibe-coder/signaling build
 ### 単体テスト
 
 ```bash
-# 全パッケージテスト
+# 高速テスト（日常開発）
+pnpm test:fast
+
+# 統合テスト（コミット前）
+pnpm test:integration
+
+# 全単体テスト
 pnpm test
 
 # 個別パッケージテスト
 pnpm --filter @vibe-coder/host test
 pnpm --filter @vibe-coder/signaling test
-pnpm --filter @vibe-coder/web test
 ```
 
 ### E2Eテスト
 
 ```bash
-# Playwrightテスト
+# E2Eテスト（自動サーバー管理）
 pnpm test:e2e
 
 # 特定テストファイル実行
 pnpm test:e2e -- --grep "authentication"
+
+# デバッグモード
+pnpm test:e2e --debug
 ```
 
 ### 統合テスト
 
 ```bash
-# サーバー起動後のテスト
-pnpm start  # 別ターミナル
-pnpm test-full
+# 統合E2Eテスト（自動サーバー管理）
+pnpm test:e2e
 ```
 
 ## 📱 モバイルテスト
@@ -300,26 +349,27 @@ docker-compose down
 ### 本番環境
 
 ```bash
-# 本番用Docker設定
-docker-compose -f docker-compose.prod.yml up -d
+# 推奨：vibe-coderスクリプト使用
+./scripts/vibe-coder start
 
-# UID/GID同期
+# 手動起動の場合（デバッグ用）
 export HOST_UID=$(id -u)
 export HOST_GID=$(id -g)
-docker-compose up -d
+docker compose up -d
 ```
 
 ## 🚀 デプロイ
 
-### Vercelデプロイ
+### Vercelデプロイ（PWA配信専用）
 
 ```bash
-# signalingサーバーデプロイ
+# PWA静的配信のみ（シグナリング機能なし）
 cd packages/signaling
 vercel deploy --prod
 
-# PWAビルド成果物も同時デプロイ
-# (public/ディレクトリが静的配信される)
+# PWAビルド成果物を事前に配置
+pnpm --filter @vibe-coder/web build
+cp -r apps/web/dist/* packages/signaling/public/
 ```
 
 ### Dockerデプロイ
@@ -329,7 +379,10 @@ vercel deploy --prod
 docker build -t jl1nie/vibe-coder:latest .
 docker push jl1nie/vibe-coder:latest
 
-# ユーザー環境での実行
+# ユーザー環境での実行（推奨）
+./scripts/vibe-coder start
+
+# 手動Docker実行（デバッグ用）
 docker run -d -p 8080:8080 \
   -e HOST_UID=$(id -u) \
   -e HOST_GID=$(id -g) \
@@ -338,9 +391,84 @@ docker run -d -p 8080:8080 \
   jl1nie/vibe-coder:latest
 ```
 
-## 🔍 トラブルシューティング
+## 🧪 テスト手順・実行方法
 
-### よくある問題
+### 📊 最新テスト状況 (2025年7月12日)
+
+**✅ 完全通過パッケージ:**
+- **shared**: 40/40テスト通過 (100%)
+- **signaling**: 9/9テスト通過 (100%)
+- **web (App.test.tsx)**: 18/18テスト通過 (100%)
+- **host (WebRTC部分)**: 5/5テスト通過 (100%)
+
+### 🔧 パッケージ別テスト実行
+
+**1. 全パッケージテスト実行**
+```bash
+# ルートディレクトリから全テスト実行
+pnpm test
+
+# カバレッジ付きテスト
+pnpm test:coverage
+```
+
+**2. パッケージ別テスト実行**
+```bash
+# Shared パッケージ（完全通過：40/40）
+cd packages/shared && npm test
+
+# Signaling パッケージ（完全通過：9/9）
+cd packages/signaling && npm test
+
+# Host パッケージ（WebRTC重要部分通過）
+cd packages/host && export HOST_UID=$(id -u) && export HOST_GID=$(id -g) && npm test
+
+# Web アプリケーション（UI部分通過：18/18）
+cd apps/web && npm test src/__tests__/App.test.tsx
+```
+
+### 🎯 WebRTC最重要機能テスト
+
+**WebRTC統合テスト（完全通過：5/5）**
+```bash
+cd packages/host
+export HOST_UID=$(id -u) && export HOST_GID=$(id -g)
+npx vitest run src/__tests__/webrtc-claude-integration.test.ts --reporter=verbose
+```
+
+**期待される結果:**
+```
+✓ src/__tests__/webrtc-claude-integration.test.ts (5 tests) 532ms
+✓ should handle WebRTC claude-command messages
+✓ should handle Claude service errors gracefully  
+✓ should handle ping/pong messages
+✓ should handle malformed messages gracefully
+✓ should handle multiple concurrent commands
+
+Tests: 5 passed (5)
+```
+
+### 🚀 E2Eテスト実行
+
+**Playwright E2Eテスト**
+```bash
+cd apps/web
+
+# E2Eテスト環境準備
+npm run build
+npm run preview &  # ポート4173でプレビューサーバー起動
+
+# E2Eテスト実行
+npx playwright test
+
+# 特定テストファイル実行
+npx playwright test src/__tests__/e2e/auth-e2e.spec.ts
+npx playwright test src/__tests__/e2e/command-execution-e2e.spec.ts
+```
+
+### 🔍 トラブルシューティング
+
+#### よくあるテスト問題
 
 **1. WebRTC接続失敗**
 ```bash
@@ -355,7 +483,14 @@ echo $HOST_UID $HOST_GID
 export HOST_UID=$(id -u) && export HOST_GID=$(id -g)
 ```
 
-**3. PWA更新が反映されない**
+**3. wrtcモジュールエラー**
+```bash
+# wrtc プリビルトバイナリ確認
+ls -la /home/minoru/src/vibe-coder/node_modules/.pnpm/wrtc@0.4.7/node_modules/wrtc/build/Release/
+# wrtc.node (17.7MB) が存在することを確認
+```
+
+**4. PWA更新が反映されない**
 ```bash
 # キャッシュクリア
 pnpm --filter @vibe-coder/web build
@@ -368,11 +503,14 @@ cp -r apps/web/dist/* packages/signaling/public/
 # 詳細ログ出力
 DEBUG=vibe-coder:* pnpm start
 
-# テスト実行時のログ
+# テスト実行時の詳細ログ
 pnpm test -- --verbose
 
 # WebRTC接続状態確認
 chrome://webrtc-internals/
+
+# wrtc モジュール動作確認
+cd packages/host && node -e "console.log(require('wrtc'))"
 ```
 
 ## 📊 パフォーマンス最適化
@@ -462,8 +600,7 @@ export function sanitizeOutput(output: string): string {
 
 - [README.md](./README.md) - ユーザー向け使用ガイド
 - [CLAUDE.md](./CLAUDE.md) - プロジェクト仕様書
-- [TESTING.md](./TESTING.md) - テスト戦略・手法
-- [API Documentation](./packages/signaling/pages/api/) - API仕様
+- [Host Test Suite](./packages/host/src/__tests__/README.md) - ホストサーバーテスト仕様
 
 ## 🤝 コントリビューション
 

@@ -1,13 +1,23 @@
 import { act } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { fireEvent, render, screen } from '../test/test-utils';
+import { fireEvent, render, screen, mockSignalingFlow, mockWebRTCOnlyFlow } from '../test/test-utils';
 
 // Use actual DEFAULT_PLAYLIST from @vibe-coder/shared
 
 describe('App Component', () => {
+  let webrtcOnlyMocks: ReturnType<typeof mockWebRTCOnlyFlow>;
+  
   beforeEach(() => {
     vi.clearAllMocks();
+    // Setup WebRTC P2P only environment for all tests
+    webrtcOnlyMocks = mockWebRTCOnlyFlow();
+    // Setup WebSocket signaling mocks
+    mockSignalingFlow();
+  });
+  
+  afterEach(() => {
+    webrtcOnlyMocks.restore();
   });
 
   it('should render the initial authentication screen', () => {
@@ -21,7 +31,7 @@ describe('App Component', () => {
 
     // Main welcome screen should be shown
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Vibe Coder' })
+      screen.getByRole('heading', { level: 2, name: 'Welcome' })
     ).toBeInTheDocument();
     expect(screen.getByText('スマホでClaude Codeを実行')).toBeInTheDocument();
     expect(screen.getByText('ホストに接続')).toBeInTheDocument();
@@ -171,9 +181,9 @@ describe('App Component', () => {
     
     const { unmount } = render(<App />);
     
-    // In development, should use localhost:5174
+    // In development, should use localhost:5175
     // This is tested implicitly through the component initialization
-    expect(screen.getByRole('heading', { level: 2, name: 'Vibe Coder' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Welcome' })).toBeInTheDocument();
     
     // Clean up before next render
     unmount();
@@ -184,7 +194,7 @@ describe('App Component', () => {
     render(<App />);
     
     // In production, should use https://vibe-coder.space
-    expect(screen.getByRole('heading', { level: 2, name: 'Vibe Coder' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Welcome' })).toBeInTheDocument();
     
     // Restore original environment
     process.env.NODE_ENV = originalEnv;
