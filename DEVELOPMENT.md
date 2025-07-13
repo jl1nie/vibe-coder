@@ -420,10 +420,10 @@ cd packages/shared && npm test
 # Signaling パッケージ（完全通過：9/9）
 cd packages/signaling && npm test
 
-# Host パッケージ（WebRTC重要部分通過）
+# Host パッケージ（WebRTC重要部分通過：5/5）
 cd packages/host && export HOST_UID=$(id -u) && export HOST_GID=$(id -g) && npm test
 
-# Web アプリケーション（UI部分通過：18/18）
+# Web アプリケーション（PWA UI完全通過：18/18）
 cd apps/web && npm test src/__tests__/App.test.tsx
 ```
 
@@ -497,6 +497,18 @@ pnpm --filter @vibe-coder/web build
 cp -r apps/web/dist/* packages/signaling/public/
 ```
 
+**5. 統一WebRTCアーキテクチャテスト問題**
+```bash
+# Simple-peer削除後のNative APIテスト
+cd packages/host && npx vitest run src/__tests__/webrtc-claude-integration.test.ts
+
+# PWA WebRTC Native APIテスト
+cd apps/web && npx vitest run src/__tests__/App.test.tsx
+
+# Pure WebSocketシグナリングテスト
+cd packages/signaling && npx vitest run tests/websocket-signaling-server.test.ts
+```
+
 ### デバッグ方法
 
 ```bash
@@ -509,8 +521,18 @@ pnpm test -- --verbose
 # WebRTC接続状態確認
 chrome://webrtc-internals/
 
-# wrtc モジュール動作確認
-cd packages/host && node -e "console.log(require('wrtc'))"
+# wrtc モジュール動作確認（統一WebRTCアーキテクチャ）
+cd packages/host && node -e "console.log('wrtc module loaded:', require('wrtc'))"
+
+# 統一WebRTCアーキテクチャデバッグ
+# PWA側: ブラウザネイティブWebRTC API
+chrome://webrtc-internals/
+
+# Host側: wrtcネイティブモジュール
+cd packages/host && npx vitest run src/__tests__/webrtc-claude-integration.test.ts --reporter=verbose
+
+# シグナリング: Pure WebSocketサーバー
+cd packages/signaling && npm test -- --verbose
 ```
 
 ## 📊 パフォーマンス最適化
