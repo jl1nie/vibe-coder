@@ -1,4 +1,5 @@
-import type { ConnectionStatus, SignalMessage } from '@vibe-coder/shared';
+import type { ConnectionStatus } from '@vibe-coder/shared';
+import { WebRTCManager } from './websocket-webrtc';
 import { DEFAULT_PLAYLIST } from '@vibe-coder/shared';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
@@ -105,8 +106,7 @@ interface AppState {
   voiceSupported: boolean;
   executionStatus: ExecutionStatus;
   promptMessage: string | null;
-  peerConnection: RTCPeerConnection | null;
-  dataChannel: RTCDataChannel | null;
+  webrtcManager: WebRTCManager | null;
   auth: AuthState;
   voiceCommandPending: boolean;
 }
@@ -122,8 +122,7 @@ const initialState: AppState = {
   voiceSupported: false,
   executionStatus: 'idle',
   promptMessage: null,
-  peerConnection: null,
-  dataChannel: null,
+  webrtcManager: null,
   auth: {
     status: 'unauthenticated',
     hostId: '',
@@ -137,12 +136,10 @@ const initialState: AppState = {
 
 const App: React.FC = () => {
   // Server URLs configuration - Runtime environment detection
-  const SIGNALING_SERVER_URL = window.location.origin.includes('localhost') 
-    ? 'http://localhost:5174'
-    : 'https://www.vibe-coder.space';
-  const HOST_SERVER_URL = window.location.origin.includes('localhost')
-    ? 'http://localhost:8080'
-    : 'https://host.vibe-coder.space';
+  // WebSocket signaling server URL
+  const SIGNALING_URL = window.location.origin.includes('localhost')
+    ? 'ws://localhost:5175'
+    : 'wss://signaling.vibe-coder.space';
 
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -195,58 +192,27 @@ const App: React.FC = () => {
   }, []);
 
   // WebRTC Connection Management
-  const initWebRTCConnection = () => {
-    let pc: RTCPeerConnection | null = null;
-    let dc: RTCDataChannel | null = null;
-    let sessionId: string | null = state.auth.sessionId;
-    let hostId: string = state.auth.hostId;
+  const initWebRTCConnection = async () => {
+    const sessionId = state.auth.sessionId;
+    const hostId = state.auth.hostId;
+    
+    if (!sessionId) {
+      console.error('❌ No authenticated sessionId');
+      return;
+    }
 
-    const createPeerConnection = async () => {
-      pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
+    console.log('🚀 Initializing WebRTC connection with WebSocket signaling...');
 
-      pc.onicecandidate = event => {
-        if (event.candidate) {
-          // Send ICE candidate to signaling server
-          console.log('Sending ICE candidate:', event.candidate);
-          const signalMessage: SignalMessage = {
-            type: 'candidate',
-            sessionId: sessionId || '',
-            hostId: hostId,
-            candidate: event.candidate.toJSON(),
-          };
-          fetch(`${SIGNALING_SERVER_URL}/api/signal`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(signalMessage),
-          }).catch(error =>
-            console.error('Failed to send ICE candidate:', error)
-          );
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log('ICE connection state:', pc?.iceConnectionState);
-        setState(prev => ({
-          ...prev,
-          connectionStatus: {
-            isConnected: pc?.iceConnectionState === 'connected',
-          },
-        }));
-      };
-
-      pc.ondatachannel = event => {
-        dc = event.channel;
-        console.log('Data channel created:', dc);
-        setState(prev => ({ ...prev, dataChannel: dc }));
-
-        dc.onmessage = event => {
-          console.log('Data channel message:', event.data);
-          try {
-            const message = JSON.parse(event.data);
-            console.log('Parsed message:', message);
-            if (xtermRef.current) {
+    try {
+      // Initialize WebRTC manager
+      const webrtcManager = new WebRTCManager({
+        signalingUrl: SIGNALING_URL,
+        sessionId,
+        hostId,
+        onMessage: (data: string) => {
+          if (xtermRef.current) {
+            try {
+              const message = JSON.parse(data);
               switch (message.type) {
                 case 'output':
                   xtermRef.current.write(message.data);
@@ -266,228 +232,62 @@ const App: React.FC = () => {
                   }));
                   break;
                 default:
-                  // Fallback for plain text messages
-                  xtermRef.current.write(event.data);
+                  xtermRef.current.write(data);
               }
-            }
-          } catch (e) {
-            // Handle plain text messages
-            if (xtermRef.current) {
-              xtermRef.current.write(event.data);
+            } catch (e) {
+              xtermRef.current.write(data);
             }
           }
-        };
-
-        dc.onopen = () => {
-          console.log('Data channel opened');
-          if (xtermRef.current) {
-            xtermRef.current.write('\r\nWebRTC Data Channel connected.\r\n');
-          }
-        };
-
-        dc.onclose = () => {
-          console.log('Data channel closed');
-          if (xtermRef.current) {
-            xtermRef.current.write(
-              '\r\n⚠️ WebRTC Data Channel disconnected. Connection lost.\r\n'
-            );
-          }
+        },
+        onConnectionChange: (connected: boolean) => {
           setState(prev => ({
             ...prev,
-            dataChannel: null,
-            connectionStatus: { isConnected: false },
+            connectionStatus: { isConnected: connected },
           }));
-        };
-
-        dc.onerror = error => {
-          console.error('Data channel error:', error);
+        },
+        onError: (error: string) => {
           if (xtermRef.current) {
-            xtermRef.current.write(
-              `\r\nData Channel Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`
-            );
+            xtermRef.current.write(`\r\nWebRTC Error: ${error}\r\n`);
           }
-        };
-      };
-
-      // Create data channel for sending messages
-      dc = pc.createDataChannel('terminal');
-      setState(prev => ({ ...prev, dataChannel: dc }));
-
-      // TODO: Implement offer/answer exchange with signaling server
-      // For now, just log initial state
-      console.log('Peer connection created.');
-    };
-
-    const initWebRTC = async () => {
-      sessionId = state.auth.sessionId;
-      if (!sessionId) {
-        throw new Error('No authenticated sessionId');
-      }
-
-      // Create a new session on the signaling server using unified API
-      try {
-        const createSessionMessage: SignalMessage = {
-          type: 'create-session',
-          sessionId: sessionId || '',
-          hostId: hostId,
-        };
-
-        const sessionResponse = await fetch(
-          `${SIGNALING_SERVER_URL}/api/signal`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(createSessionMessage),
-          }
-        );
-        const sessionData = await sessionResponse.json();
-        if (!sessionData.success) {
-          throw new Error(`Failed to create session: ${sessionData.error}`);
         }
-        console.log('Session created successfully');
+      });
 
-        await createPeerConnection();
-
-        // Create offer and send to signaling server
-        const offer = await pc?.createOffer();
-        await pc?.setLocalDescription(offer);
-
-        const signalMessage: SignalMessage = {
-          type: 'offer',
-          sessionId: sessionId || '',
-          hostId: 'vibe-coder-host',
-          offer: { type: offer?.type as 'offer', sdp: offer?.sdp || '' },
-        };
-
-        const signalResponse = await fetch(
-          `${SIGNALING_SERVER_URL}/api/signal`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(signalMessage),
-          }
-        );
-        const signalData = await signalResponse.json();
-        if (!signalData.success) {
-          throw new Error(`Failed to send offer: ${signalData.error}`);
-        }
-        console.log('Offer sent to signaling server.');
-
-        // Poll for answer and ICE candidates from signaling server
-        let answerReceived = false;
-
-        const pollForAnswer = async () => {
-          if (answerReceived) return;
-
-          const getAnswerMessage: SignalMessage = {
-            type: 'get-answer',
-            sessionId: sessionId || '',
-            hostId: 'vibe-coder-host',
-          };
-
-          const answerResponse = await fetch(
-            `${SIGNALING_SERVER_URL}/api/signal`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(getAnswerMessage),
-            }
-          );
-          const answerData = await answerResponse.json();
-
-          if (answerData.success && answerData.answer) {
-            console.log('Received answer:', answerData.answer);
-            const remoteDesc = new RTCSessionDescription(answerData.answer);
-            await pc?.setRemoteDescription(remoteDesc);
-            answerReceived = true;
-            if (xtermRef.current) {
-              xtermRef.current.write('\r\nWebRTC connection established.\r\n');
-            }
-          } else {
-            setTimeout(pollForAnswer, 1000); // Poll every 1 second
-          }
-        };
-
-        const pollForCandidates = async () => {
-          const getCandidatesMessage: SignalMessage = {
-            type: 'get-candidate',
-            sessionId: sessionId || '',
-            hostId: 'vibe-coder-host',
-          };
-
-          try {
-            const candidatesResponse = await fetch(
-              `${SIGNALING_SERVER_URL}/api/signal`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(getCandidatesMessage),
-              }
-            );
-            const candidatesData = await candidatesResponse.json();
-
-            if (
-              candidatesData.success &&
-              candidatesData.candidates?.length > 0
-            ) {
-              console.log(
-                'Received ICE candidates:',
-                candidatesData.candidates
-              );
-              for (const candidateData of candidatesData.candidates) {
-                try {
-                  const candidate = JSON.parse(candidateData.candidate);
-                  await pc?.addIceCandidate(new RTCIceCandidate(candidate));
-                } catch (error) {
-                  console.error('Failed to add ICE candidate:', error);
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Failed to fetch ICE candidates:', error);
-          }
-
-          // Continue polling for more candidates
-          setTimeout(pollForCandidates, 2000);
-        };
-
-        pollForAnswer();
-        pollForCandidates();
-      } catch (error: any) {
-        console.error('WebRTC initialization error:', error);
-        if (xtermRef.current) {
-          xtermRef.current.write(
-            `\r\nWebRTC Init Error: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`
-          );
-        }
+      // Connect to WebRTC
+      const success = await webrtcManager.connect();
+      
+      if (success) {
+        setState(prev => ({ ...prev, webrtcManager }));
+        console.log('✅ WebRTC connection initialized successfully');
+      } else {
+        console.error('❌ WebRTC connection failed');
         setState(prev => ({
           ...prev,
           connectionStatus: { isConnected: false },
         }));
       }
-    };
 
-    initWebRTC();
-
-    return () => {
-      if (pc) {
-        pc.close();
+    } catch (error) {
+      console.error('❌ WebRTC initialization failed:', error);
+      if (xtermRef.current) {
+        xtermRef.current.write(`\r\nWebRTC connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\r\n`);
       }
-      if (dc) {
-        dc.close();
-      }
-    };
+      setState(prev => ({
+        ...prev,
+        connectionStatus: { isConnected: false },
+        webrtcManager: null,
+      }));
+    }
   };
 
   // Auto-initialize WebRTC connection after authentication
   useEffect(() => {
-    if (state.auth.status === 'authenticated' && !state.peerConnection) {
+    if (state.auth.status === 'authenticated' && !state.webrtcManager) {
       console.log(
         'Authentication successful, initializing WebRTC connection...'
       );
       initWebRTCConnection();
     }
-  }, [state.auth.status, state.peerConnection]);
+  }, [state.auth.status, state.webrtcManager]);
 
   // Check voice recognition support and initialize
   useEffect(() => {
@@ -575,71 +375,31 @@ const App: React.FC = () => {
       }));
 
       try {
-        // Execute command via REST API (fallback) or WebRTC (if available)
-        if (state.dataChannel && state.dataChannel.readyState === 'open') {
-          // Use WebRTC data channel for real-time communication
-          state.dataChannel.send(
-            JSON.stringify({
-              type: 'claude-command',
-              command,
-              timestamp: Date.now(),
-            })
-          );
-        } else {
-          // Use REST API as fallback
-          const response = await fetch(
-            `${HOST_SERVER_URL}/api/claude/execute`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${state.auth.jwt}`,
-              },
-              body: JSON.stringify({ command }),
+        // Execute command via WebRTC P2P connection only
+        if (state.webrtcManager) {
+          const webrtcState = state.webrtcManager.getState();
+          if (webrtcState.dataChannel && webrtcState.dataChannel.readyState === 'open') {
+            // Use WebRTC data channel for real-time communication
+            const success = state.webrtcManager.sendMessage(
+              JSON.stringify({
+                type: 'claude-command',
+                command,
+                timestamp: Date.now(),
+              })
+            );
+            if (success) {
+              console.log('✅ Command sent via WebRTC');
+              return; // Exit early if WebRTC succeeded
             }
-          );
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              // Session expired - redirect to 2FA
-              setState(prev => ({
-                ...prev,
-                auth: {
-                  ...prev.auth,
-                  status: 'entering_totp',
-                  jwt: null,
-                  error: 'セッションが期限切れです。再度認証してください。',
-                  totpInput: '', // Clear TOTP input
-                },
-                connectionStatus: { isConnected: false },
-                peerConnection: null,
-                dataChannel: null,
-                executionStatus: 'idle',
-              }));
-              if (xtermRef.current) {
-                xtermRef.current.write(
-                  '\r\n⚠️ Session expired. Please re-authenticate.\r\n'
-                );
-              }
-              return;
-            }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-
-          const result = await response.json();
-
-          if (xtermRef.current) {
-            if (result.output) {
-              xtermRef.current.write(result.output + '\r\n');
-            }
-            if (result.error) {
-              xtermRef.current.write(`Error: ${result.error}\r\n`);
-            }
-            xtermRef.current.write('user@localhost:~/project$ ');
-          }
-
-          setState(prev => ({ ...prev, executionStatus: 'idle' }));
         }
+        
+        // WebRTC is required - no fallback to REST API
+        if (xtermRef.current) {
+          xtermRef.current.write('\r\n❌ WebRTC P2P connection required. Please check connection.\r\n');
+          xtermRef.current.write('user@localhost:~/project$ ');
+        }
+        setState(prev => ({ ...prev, executionStatus: 'idle' }));
       } catch (error) {
         if (xtermRef.current) {
           xtermRef.current.write(
@@ -650,7 +410,7 @@ const App: React.FC = () => {
         setState(prev => ({ ...prev, executionStatus: 'idle' }));
       }
     },
-    [state.auth.jwt, state.dataChannel]
+    [state.auth.jwt, state.webrtcManager]
   );
 
   const handlePromptResponse = async (response: string) => {
@@ -658,8 +418,8 @@ const App: React.FC = () => {
       xtermRef.current.write(`${response}\r\n`);
     }
 
-    if (state.dataChannel && state.dataChannel.readyState === 'open') {
-      state.dataChannel.send(JSON.stringify({ type: 'response', response }));
+    if (state.webrtcManager) {
+      state.webrtcManager.sendMessage(JSON.stringify({ type: 'response', response }));
     } else {
       if (xtermRef.current) {
         xtermRef.current.write('\r\nWebRTC Data Channel is not open.\r\n');
@@ -717,35 +477,25 @@ const App: React.FC = () => {
         auth: { ...prev.auth, error: null },
       }));
 
-      // Create session with host server - now requires Host ID validation
-      const response = await fetch(`${HOST_SERVER_URL}/api/auth/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostId: state.auth.hostId }),
+      // Create WebRTC manager for authentication via signaling
+      const webrtcManager = new WebRTCManager({
+        sessionId: 'temp-session', // Temporary session ID
+        signalingUrl: SIGNALING_URL,
+        hostId: state.auth.hostId,
+        onMessage: () => {}, // Temporary empty handler
+        onConnectionChange: () => {}
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(
-            'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
-            'ホストサーバーでの2FA設定が必要です。ホストマシンから http://localhost:8080/setup にアクセスしてください。'
-          );
-        } else if (response.status === 500) {
-          throw new Error('ホストサーバーに接続できません');
-        } else {
-          throw new Error('接続エラーが発生しました');
-        }
-      }
+      // Authenticate with host via WebSocket signaling
+      const authResult = await webrtcManager.authenticateHost(state.auth.hostId);
 
-      const data = await response.json();
-
-      // Go directly to TOTP input (no QR code generation on PWA side)
+      // Go directly to TOTP input
       setState(prev => ({
         ...prev,
         auth: {
           ...prev.auth,
           status: 'entering_totp',
-          sessionId: data.sessionId,
+          sessionId: authResult.sessionId,
           totpInput: '', // Clear TOTP input
         },
       }));
@@ -768,91 +518,33 @@ const App: React.FC = () => {
         auth: { ...prev.auth, error: null },
       }));
 
-      // If no sessionId, create a new session first
+      // If no sessionId, authentication flow should start from host ID again
       if (!state.auth.sessionId) {
-        console.log('No sessionId, creating new session...');
-        const sessionResponse = await fetch(
-          `${HOST_SERVER_URL}/api/auth/sessions`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ hostId: state.auth.hostId }),
-          }
-        );
-
-        if (!sessionResponse.ok) {
-          if (sessionResponse.status === 404) {
-            throw new Error(
-              'Host IDが見つかりません。正しい8桁の数字を入力してください。\n' +
-              'ホストサーバーでの2FA設定が必要です。ホストマシンから http://localhost:8080/setup にアクセスしてください。'
-            );
-          } else if (sessionResponse.status === 500) {
-            throw new Error('ホストサーバーに接続できません');
-          } else {
-            throw new Error('接続エラーが発生しました');
-          }
-        }
-
-        const sessionData = await sessionResponse.json();
-        console.log('Session created:', sessionData);
-
-        // No QR code generation - PWA assumes 2FA is already set up on host
-        setState(prev => ({
-          ...prev,
-          auth: {
-            ...prev.auth,
-            sessionId: sessionData.sessionId,
-          },
-        }));
+        throw new Error('セッションIDがありません。Host IDから再度認証してください。');
       }
 
-      const verifyUrl = `${HOST_SERVER_URL}/api/auth/sessions/${state.auth.sessionId}/verify`;
-      console.log('Calling TOTP verification API:', verifyUrl);
-      const response = await fetch(verifyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ totpCode }),
+      // Create WebRTC manager for TOTP verification via signaling
+      const webrtcManager = new WebRTCManager({
+        sessionId: state.auth.sessionId || 'temp-session',
+        signalingUrl: SIGNALING_URL,
+        hostId: state.auth.hostId,
+        onMessage: () => {}, // Temporary empty handler
+        onConnectionChange: () => {}
       });
 
-      console.log('TOTP verification response status:', response.status);
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('認証コードが正しくありません');
-        } else if (response.status === 404) {
-          // Session expired, need to create new session
-          setState(prev => ({
-            ...prev,
-            auth: {
-              ...prev.auth,
-              sessionId: null,
-              totpInput: '', // Clear TOTP input
-            },
-          }));
-          throw new Error(
-            'セッションが期限切れです。もう一度認証コードを入力してください'
-          );
-        } else {
-          throw new Error('サーバーエラーが発生しました');
-        }
-      }
+      // Verify TOTP via WebSocket signaling
+      const verifyResult = await webrtcManager.verifyTotp(state.auth.sessionId!, totpCode);
 
-      const data = await response.json();
-      console.log('TOTP verification response data:', data);
+      setState(prev => ({
+        ...prev,
+        auth: {
+          ...prev.auth,
+          status: 'authenticated',
+          jwt: verifyResult.token,
+        },
+      }));
 
-      if (data.success) {
-        setState(prev => ({
-          ...prev,
-          auth: {
-            ...prev.auth,
-            status: 'authenticated',
-            jwt: data.token,
-          },
-        }));
-
-        // WebRTC connection will be started automatically after authentication
-      } else {
-        throw new Error(data.message || '認証に失敗しました');
-      }
+      console.log('✅ TOTP verification successful via signaling');
     } catch (error) {
       console.error('handleTotpSubmit error:', error);
       setState(prev => ({
@@ -900,11 +592,8 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     // Close WebRTC connections
-    if (state.peerConnection) {
-      state.peerConnection.close();
-    }
-    if (state.dataChannel) {
-      state.dataChannel.close();
+    if (state.webrtcManager) {
+      state.webrtcManager.cleanup();
     }
 
     // Return to 2FA screen (keep hostId and session info)
@@ -918,8 +607,7 @@ const App: React.FC = () => {
         totpInput: '', // Clear TOTP input
       },
       connectionStatus: { isConnected: false },
-      peerConnection: null,
-      dataChannel: null,
+      webrtcManager: null,
       executionStatus: 'idle',
       promptMessage: null,
     }));
@@ -991,6 +679,7 @@ const App: React.FC = () => {
                 placeholder="12345678"
                 maxLength={8}
                 autoFocus
+                data-testid="host-id-input"
               />
 
               {state.auth.error && (
@@ -1011,6 +700,7 @@ const App: React.FC = () => {
                 onClick={handleHostIdSubmit}
                 disabled={state.auth.hostId.length !== 8}
                 className="w-full p-4 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="connect-button"
               >
                 接続
               </button>
@@ -1053,7 +743,17 @@ const App: React.FC = () => {
                 placeholder="000000"
                 maxLength={6}
                 autoFocus
+                data-testid="totp-input"
               />
+
+              <button
+                onClick={() => handleTotpSubmit(state.auth.totpInput)}
+                disabled={state.auth.totpInput.length !== 6}
+                className="w-full p-4 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                data-testid="authenticate-button"
+              >
+                認証
+              </button>
 
               {state.auth.error && (
                 <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
@@ -1078,11 +778,13 @@ const App: React.FC = () => {
                       status: 'entering_host_id',
                       error: null,
                       sessionId: null,
+                      hostId: '', // Clear Host ID input
                       totpInput: '', // Clear TOTP input
                     },
                   }))
                 }
                 className="w-full p-3 glass-morphism rounded-lg hover:bg-white/20 transition-all touch-friendly text-sm opacity-80"
+                data-testid="back-button"
               >
                 戻る
               </button>
@@ -1096,7 +798,7 @@ const App: React.FC = () => {
     return (
       <div className="flex-1 p-6 flex flex-col items-center justify-center">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold mb-4">Vibe Coder</h2>
+          <h2 className="text-3xl font-bold mb-4" data-testid="welcome-title">Welcome</h2>
           <p className="text-lg opacity-80 mb-2">スマホでClaude Codeを実行</p>
           <p className="text-sm opacity-60">
             まずはホストサーバーに接続してください
@@ -1111,6 +813,7 @@ const App: React.FC = () => {
             }))
           }
           className="glass-morphism rounded-xl p-6 hover:bg-white/20 transition-all touch-friendly"
+          data-testid="connect-to-host-button"
         >
           <div className="text-center">
             <div className="text-4xl mb-3">🔗</div>
@@ -1129,7 +832,7 @@ const App: React.FC = () => {
         <div className="flex items-center space-x-2">
           {/* <Terminal className="w-5 h-5 text-green-400" /> */}
           <div>
-            <h1 className="text-lg font-bold">Vibe Coder</h1>
+            <h1 className="text-lg font-bold" data-testid="app-title">Vibe Coder</h1>
             <p className="text-xs opacity-80">Claude Code Mobile</p>
           </div>
         </div>
@@ -1183,7 +886,7 @@ const App: React.FC = () => {
               <span className="text-sm font-medium flex items-center">
                 Terminal
               </span>
-              <span className="text-xs opacity-70">
+              <span className="text-xs opacity-70" data-testid="connection-status">
                 {state.executionStatus === 'running' && 'Running...'}
                 {state.executionStatus === 'awaitingInput' &&
                   'Awaiting input...'}
@@ -1195,6 +898,7 @@ const App: React.FC = () => {
 
             <div
               ref={terminalRef}
+              data-testid="terminal-container"
               className="glass-morphism rounded-lg p-3 flex-1 overflow-y-auto terminal-output cursor-pointer hover:border-gray-600 transition-colors custom-scrollbar min-h-0"
             >
               {/* xterm.js will render here */}
@@ -1215,6 +919,8 @@ const App: React.FC = () => {
                 onKeyDown={e => e.key === 'Enter' && handleTextSubmit()}
                 className="flex-1 bg-transparent text-white outline-none"
                 disabled={isExecuting}
+                data-testid="command-input"
+                placeholder="Enter command..."
               />
               <button
                 onClick={handleTextSubmit}
