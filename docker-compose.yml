@@ -1,4 +1,23 @@
 services:
+  vibe-coder-signaling:
+    build:
+      context: .
+      dockerfile: packages/signaling-ws/Dockerfile
+    container_name: vibe-coder-signaling
+    ports:
+      - "5175:5175"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=5175
+      - HOST=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5175"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   vibe-coder-host:
     build:
       context: .
@@ -6,6 +25,9 @@ services:
     container_name: vibe-coder-host
     ports:
       - "8080:8080"
+    depends_on:
+      vibe-coder-signaling:
+        condition: service_healthy
     volumes:
       # Claude Code設定をマウント
       - ~/.claude:/app/.claude
@@ -19,10 +41,12 @@ services:
       # Vibe Coder configuration
       - VIBE_CODER_PORT=${VIBE_CODER_PORT:-8080}
       - VIBE_CODER_PWA_URL=${VIBE_CODER_PWA_URL}
-      - VIBE_CODER_SIGNALING_URL=${VIBE_CODER_SIGNALING_URL}
+      - VIBE_CODER_SIGNALING_URL=${VIBE_CODER_SIGNALING_URL:-vibe-coder-signaling:5175}
       - VIBE_CODER_HOST_URL=${VIBE_CODER_HOST_URL}
       - VIBE_CODER_CLAUDE_PATH=${VIBE_CODER_CLAUDE_PATH:-/usr/local/bin/claude}
       - VIBE_CODER_WORKSPACE_PATH=${VIBE_CODER_WORKSPACE_PATH:-/app/workspace}
+      # Disable STUN servers for local Docker testing
+      - VIBE_CODER_WEBRTC_STUN_SERVERS=
       # インタラクティブモードを有効化
       - TERM=xterm-256color
       - COLUMNS=120

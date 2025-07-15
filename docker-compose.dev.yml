@@ -1,32 +1,66 @@
-version: '3.8'
-
 services:
+  # WebSocket-only Signaling Server
+  vibe-coder-signaling:
+    build:
+      context: .
+      dockerfile: packages/signaling-ws/Dockerfile
+    container_name: vibe-coder-signaling-dev
+    ports:
+      - "5175:5175"
+    environment:
+      - NODE_ENV=development
+      - PORT=5175
+      - HOST=0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5175"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Host Server with Claude Code Integration
   vibe-coder-host:
     build:
       context: .
       dockerfile: packages/host/Dockerfile
-      target: builder  # Use builder stage for development
     container_name: vibe-coder-host-dev
     ports:
       - "8080:8080"
+    depends_on:
+      vibe-coder-signaling:
+        condition: service_healthy
     volumes:
-      - ./workspace:/app/workspace
-      - ~/.claude:/app/.claude:ro
-      - ./packages/host/src:/app/packages/host/src  # Mount source for live reload
+      # Claude Code設定をマウント
+      - ~/.claude:/app/.claude
+      # 現在の作業ディレクトリをマウント（vibe-coderファイルの永続化用）
+      - .:/app/workspace
     environment:
       - NODE_ENV=development
-      - SIGNALING_SERVER_URL=${SIGNALING_SERVER_URL:-https://vibe-coder.space/api/signal}
-      - SESSION_SECRET=${SESSION_SECRET:-development-secret-key-for-testing-minimum-32-characters-required}
-      - MAX_CONCURRENT_SESSIONS=5
-      - COMMAND_TIMEOUT=30000
-      - ENABLE_SECURITY=true
-      - LOG_LEVEL=debug
-      - DEBUG=vibe-coder:*
+      - CLAUDE_CONFIG_PATH=/app/.claude
+      - HOST_UID=${HOST_UID}
+      - HOST_GID=${HOST_GID}
+      # Vibe Coder configuration (development)
+      - VIBE_CODER_PORT=8080
+      - VIBE_CODER_PWA_URL=http://localhost:5174
+      - VIBE_CODER_SIGNALING_URL=localhost:5175
+      - VIBE_CODER_HOST_URL=http://localhost:8080
+      - VIBE_CODER_CLAUDE_PATH=/usr/local/bin/claude
+      - VIBE_CODER_WORKSPACE_PATH=/app/workspace
+      # インタラクティブモードを有効化
+      - TERM=xterm-256color
+      - COLUMNS=120
+      - LINES=30
+    working_dir: /app
+    command: ["node", "packages/host/dist/host/src/index.js"]
     restart: unless-stopped
-    command: ["npm", "run", "dev"]  # Use development command
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
+
+# Note: PWA (port 5174) runs separately via:
+# cd apps/web && pnpm dev
+# This provides hot reloading and faster development experience

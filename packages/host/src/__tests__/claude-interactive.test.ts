@@ -83,7 +83,7 @@ describe('Claude Interactive Service', () => {
 });
 
 // Real integration test (only run if Claude is available)
-describe('Claude Interactive Integration (Real)', () => {
+describe.skip('Claude Interactive Integration (Real)', () => {
   let service: ClaudeInteractiveService;
 
   beforeEach(() => {

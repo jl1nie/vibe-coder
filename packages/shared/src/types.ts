@@ -47,7 +47,7 @@ export const WebRTCAnswerSchema = z.object({
 
 export const WebRTCIceCandidateSchema = z.object({
   sessionId: z.string(),
-  candidate: z.string(),
+  candidate: z.any(), // RTCIceCandidateInit オブジェクト形式
   timestamp: z.number(),
 });
 
@@ -118,22 +118,39 @@ export interface HostInfo {
   createdAt: Date;
 }
 
-// シグナリングサーバー用の型定義
-export const SignalMessageSchema = z.object({
-  type: z.enum(['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate']),
+// 統一WebSocketシグナリング型定義
+export const WebSocketSignalMessageSchema = z.object({
+  type: z.enum([
+    'register-host', 'session-create', 'session-join', 'session-leave', 
+    'join-session', 'leave-session',
+    'offer', 'answer', 'ice-candidate',
+    'peer-connected', 'peer-disconnected', 'error', 'heartbeat'
+  ]),
   sessionId: z.string(),
-  hostId: z.string(),
-  offer: WebRTCOfferSchema.optional(),
-  answer: WebRTCAnswerSchema.optional(),
-  candidate: z.any().optional(), // RTCIceCandidateInit is not directly available in Zod
+  clientId: z.string(), // PWA or Host identifier
+  offer: z.any().optional(), // RTCSessionDescriptionInit
+  answer: z.any().optional(), // RTCSessionDescriptionInit
+  candidate: z.any().optional(), // RTCIceCandidateInit
+  timestamp: z.number(),
+  messageId: z.string().optional(),
+  error: z.string().optional(),
 });
 
-export const SignalResponseSchema = z.object({
-  success: z.boolean(),
+export const WebSocketSignalResponseSchema = z.object({
+  type: z.enum([
+    'session-created', 'session-joined', 'session-left',
+    'offer-received', 'answer-received', 'candidate-received',
+    'peer-connected', 'peer-disconnected', 'error', 'success'
+  ]),
+  sessionId: z.string(),
+  clientId: z.string().optional(),
+  offer: z.any().optional(),
+  answer: z.any().optional(),
+  candidate: z.any().optional(),
+  timestamp: z.number(),
+  messageId: z.string().optional(),
   message: z.string().optional(),
-  offer: WebRTCOfferSchema.optional(),
-  answer: WebRTCAnswerSchema.optional(),
-  candidates: z.array(WebRTCIceCandidateSchema).optional(), // 追加
+  error: z.string().optional(),
 });
 
 export const SessionInfoSchema = z.object({
@@ -144,19 +161,64 @@ export const SessionInfoSchema = z.object({
   connectedClients: z.number(),
 });
 
-export const SessionResponseSchema = z.object({
+// 統一WebSocketメッセージインターフェース
+export interface WebSocketSignalMessage {
+  type: 'register-host' | 'session-create' | 'session-join' | 'session-leave' |
+        'join-session' | 'leave-session' |
+        'offer' | 'answer' | 'ice-candidate' |
+        'peer-connected' | 'peer-disconnected' | 'error' | 'heartbeat';
+  sessionId: string;
+  clientId: string; // PWA or Host identifier
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: any; // ICE候補は文字列またはオブジェクト形式
+  timestamp: number;
+  messageId?: string;
+  error?: string;
+}
+
+export interface WebSocketSignalResponse {
+  type: 'session-created' | 'session-joined' | 'session-left' |
+        'offer-received' | 'answer-received' | 'candidate-received' |
+        'offer' | 'answer' | 'ice-candidate' |
+        'peer-connected' | 'peer-disconnected' | 'error' | 'success';
+  sessionId: string;
+  clientId?: string;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: any; // ICE候補は文字列またはオブジェクト形式
+  timestamp: number;
+  messageId?: string;
+  message?: string;
+  error?: string;
+}
+
+// 旧型定義（後方互換性のため暫定保持）
+export const SignalMessageSchema = z.object({
+  type: z.enum(['create-session', 'offer', 'answer', 'get-offer', 'get-answer', 'candidate', 'get-candidate']),
+  sessionId: z.string(),
+  hostId: z.string(),
+  offer: WebRTCOfferSchema.optional(),
+  answer: WebRTCAnswerSchema.optional(),
+  candidate: z.any().optional(),
+});
+
+export const SignalResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
-  sessionInfo: SessionInfoSchema.optional(),
+  offer: WebRTCOfferSchema.optional(),
+  answer: WebRTCAnswerSchema.optional(),
+  candidates: z.array(WebRTCIceCandidateSchema).optional(),
 });
 
 export interface SignalMessage {
   type: 'create-session' | 'offer' | 'answer' | 'get-offer' | 'get-answer' | 'candidate' | 'get-candidate';
   sessionId: string;
   hostId: string;
+  clientId?: string; // PWA client identifier
   offer?: WebRTCOffer;
   answer?: WebRTCAnswer;
-  candidate?: any; // RTCIceCandidateInit
+  candidate?: any;
 }
 
 export interface SignalResponse {
@@ -167,4 +229,3 @@ export interface SignalResponse {
   candidates?: WebRTCIceCandidate[];
 }
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
-export type SessionResponse = z.infer<typeof SessionResponseSchema>;

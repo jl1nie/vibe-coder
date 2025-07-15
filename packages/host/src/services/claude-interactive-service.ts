@@ -345,6 +345,46 @@ export class ClaudeInteractiveService {
   }
 
   /**
+   * アクティブセッション一覧の取得
+   */
+  public getActiveSessions(): ClaudeInteractiveSession[] {
+    return Array.from(this.sessions.values()).filter(session => !session.isDestroyed);
+  }
+
+  /**
+   * セッション統計の取得
+   */
+  public getSessionStats(): {
+    total: number;
+    active: number;
+    ready: number;
+    averageLifetime: number;
+  } {
+    const sessions = Array.from(this.sessions.values());
+    const now = new Date();
+    let totalLifetime = 0;
+    let activeCount = 0;
+    let readyCount = 0;
+
+    for (const session of sessions) {
+      if (!session.isDestroyed) {
+        activeCount++;
+        if (session.isReady) {
+          readyCount++;
+        }
+      }
+      totalLifetime += now.getTime() - session.createdAt.getTime();
+    }
+
+    return {
+      total: sessions.length,
+      active: activeCount,
+      ready: readyCount,
+      averageLifetime: sessions.length > 0 ? totalLifetime / sessions.length : 0
+    };
+  }
+
+  /**
    * 非アクティブなセッションをクリーンアップ
    */
   public cleanupInactiveSessions(): void {

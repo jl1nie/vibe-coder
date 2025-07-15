@@ -1,14 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Use process.env.PORT by default and fallback to 5173 if not specified.
-const PORT = process.env.PORT || 5173;
-
-// Set web server command for local development.
-const serverCommand = process.env.CI ? 'npm run start' : 'npm run dev';
+// New architecture: Signaling server port
+const SIGNALING_PORT = process.env.SIGNALING_PORT || 5174;
+const HOST_PORT = process.env.HOST_PORT || 8080;
 
 export default defineConfig({
-  // Timeout per test
-  timeout: 30 * 1000,
+  // Timeout per test (optimized for development vs CI)
+  timeout: process.env.CI ? 120 * 1000 : 60 * 1000, // CI: 2分、Local: 1分
+  // Global timeout for all tests
+  globalTimeout: process.env.CI ? 5 * 60 * 1000 : 4 * 60 * 1000, // CI: 5分、Local: 4分
   // Test directory
   testDir: './apps/web/src/__tests__/e2e',
   // If a test fails, retry it additional 2 times
@@ -19,53 +19,101 @@ export default defineConfig({
   // Reporter to use
   reporter: [['list'], ['html']],
 
-  // Run your local dev server before starting the tests:
-  // https://playwright.dev/docs/test-advanced#launching-a-development-web-server
-  webServer: {
-    command: serverCommand,
-    url: `http://localhost:${PORT}`,
-    timeout: 60 * 1000,
-    reuseExistingServer: true,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  // Global setup for test environment
+  globalSetup: require.resolve('./test-setup/global-setup.ts'),
+  globalTeardown: require.resolve('./test-setup/global-teardown.ts'),
+
+  // Servers are expected to be already running
+  // webServer is commented out since we manually start servers
+  /*
+  webServer: [
+    {
+      command: 'cd packages/signaling && pnpm dev',
+      url: `http://localhost:${SIGNALING_PORT}`,
+      timeout: 60 * 1000,
+      reuseExistingServer: true,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command: 'cd packages/host && NODE_ENV=test pnpm start',
+      url: `http://localhost:${HOST_PORT}/api/health`,
+      timeout: 60 * 1000,
+      reuseExistingServer: true,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
+  */
 
   use: {
-    // Use baseURL so to make navigations relative.
-    // More information: https://playwright.dev/docs/api/class-testoptions#test-options-base-url
-    baseURL: `http://localhost:${PORT}`,
+    // Use signaling server as baseURL
+    baseURL: `http://localhost:${SIGNALING_PORT}`,
 
-    // Retry a test if its failing with enabled tracing. This allows you to analyse the DOM, console logs, network traffic etc.
-    // More information: https://playwright.dev/docs/trace-viewer
+    // Retry a test if its failing with enabled tracing
     trace: 'retry-with-trace',
 
-    // All available context options: https://playwright.dev/docs/api/class-browser#browser-new-context
-    // contextOptions: {
-    //   ignoreHTTPSErrors: true,
-    // },
+    // Enable video recording for debugging
+    video: 'retain-on-failure',
+
+    // Take screenshot on failure
+    screenshot: 'only-on-failure',
+
+    // Context options for WebRTC testing
+    contextOptions: {
+      // Safari doesn't support microphone permission in test context
+      ignoreHTTPSErrors: true,
+    },
   },
 
   projects: [
     {
       name: 'Desktop Chrome',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Chrome-specific flags for WebRTC testing
+        launchOptions: {
+          args: [
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            '--autoplay-policy=no-user-gesture-required',
+          ],
+        },
+        // Chrome-specific context options
+        contextOptions: {
+          permissions: ['microphone'], // For voice recognition tests
+        },
+      },
     },
-    // {
-    //   name: 'Desktop Firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'Desktop Safari',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
-    // Test against mobile viewports.
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
+    {
+      name: 'Mobile Chrome',
+      use: { 
+        ...devices['Pixel 5'],
+        // Mobile-specific settings
+        launchOptions: {
+          args: [
+            '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+          ],
+        },
+        // Mobile Chrome-specific context options
+        contextOptions: {
+          permissions: ['microphone'], // For voice recognition tests
+        },
+      },
+    },
+    {
+      name: 'Mobile Safari',
+      use: { 
+        ...devices['iPhone 12'],
+        // Safari may have different WebRTC behavior
+      },
+    },
+    {
+      name: 'Tablet iPad',
+      use: { 
+        ...devices['iPad Pro'],
+      },
+    },
   ],
 });

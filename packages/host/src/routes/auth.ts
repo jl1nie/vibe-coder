@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { createSessionValidationMiddleware } from '../middleware/auth';
 import { asyncHandler } from '../middleware/error';
 import { SessionManager } from '../services/session-manager';
-import { HOST_URL } from '../../../shared/src/constants';
+// Host URL is dynamically determined from request
+const getHostUrl = (req: any): string => {
+  return `${req.protocol}://${req.get('host')}`;
+};
 import logger from '../utils/logger';
 
 export function createAuthRouter(sessionManager: SessionManager): Router {
@@ -122,7 +125,7 @@ export function createAuthRouter(sessionManager: SessionManager): Router {
       sessionId,
       hostId: sessionManager.getHostId(),
       // Don't return totpSecret to PWA - forces server-side setup
-      message: `Enter the 6-digit code from your authenticator app. If you haven't set up 2FA yet, please access ${HOST_URL}/setup from the host machine.`,
+      message: `Enter the 6-digit code from your authenticator app. If you haven't set up 2FA yet, please access ${getHostUrl(req)}/setup from the host machine.`,
     });
   }));
 

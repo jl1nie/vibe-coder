@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: 'edge-runtime',
     globals: true,
+    // シグナリング系：高速タイムアウト
+    testTimeout: 5000, // 5秒
+    hookTimeout: 5000, // 5秒
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

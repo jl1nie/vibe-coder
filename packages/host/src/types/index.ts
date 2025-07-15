@@ -24,6 +24,9 @@ export interface HostConfig {
   port: number;
   claudeConfigPath: string;
   signalingUrl: string;
+  signalingWsPath: string;
+  signalingConnectionTimeout: number;
+  signalingHeartbeatInterval: number;
   sessionSecret: string;
   totpSecret: string;
   maxConcurrentSessions: number;
@@ -31,6 +34,8 @@ export interface HostConfig {
   enableSecurity: boolean;
   logLevel: string;
   hostId: string;
+  webrtcStunServers: string[];
+  webrtcTurnServers: string[];
 }
 
 export interface SessionData {

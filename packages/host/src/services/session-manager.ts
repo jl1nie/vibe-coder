@@ -19,6 +19,7 @@ export class SessionManager {
   private sessions = new Map<string, SessionData>();
   private hostId: string;
   private cleanupInterval!: NodeJS.Timeout;
+  private onAuthenticationCallbacks: ((sessionId: string) => void)[] = [];
 
   constructor() {
     this.hostId = hostConfig.hostId;
@@ -121,6 +122,9 @@ export class SessionManager {
       session.isAuthenticated = true;
       session.lastActivity = new Date();
       logger.info('TOTP verification successful', { sessionId });
+      
+      // Notify authentication completion for WebRTC registration
+      this.notifyAuthentication(sessionId);
     } else {
       logger.warn('TOTP verification failed: invalid token', { sessionId });
     }
@@ -212,6 +216,36 @@ export class SessionManager {
     if (cleanedCount > 0) {
       logger.info('Cleaned up expired sessions', { count: cleanedCount });
     }
+  }
+
+  public getAuthenticatedSessions(): string[] {
+    const now = new Date();
+    const authenticatedSessions: string[] = [];
+    
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.isAuthenticated && now <= session.expiresAt) {
+        authenticatedSessions.push(sessionId);
+      }
+    }
+    
+    return authenticatedSessions;
+  }
+
+  public onAuthentication(callback: (sessionId: string) => void): void {
+    this.onAuthenticationCallbacks.push(callback);
+  }
+
+  private notifyAuthentication(sessionId: string): void {
+    this.onAuthenticationCallbacks.forEach(callback => {
+      try {
+        callback(sessionId);
+      } catch (error) {
+        logger.error('Authentication callback error', { 
+          sessionId, 
+          error: (error as Error).message 
+        });
+      }
+    });
   }
 
   public destroy(): void {

@@ -6,6 +6,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/__tests__/setup.ts'],
+    // 日常開発用：高速タイムアウト
+    testTimeout: 10000, // 10秒（WebRTC接続テスト考慮）
+    hookTimeout: 10000, // 10秒
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

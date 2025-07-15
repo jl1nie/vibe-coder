@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import express from 'express';
-import { WebSocketServer } from 'ws';
 
-// Mock all external dependencies
-vi.mock('cors');
-vi.mock('helmet');
+// Mock all external dependencies with return values
+vi.mock('cors', () => ({ default: () => (req: any, res: any, next: any) => next() }));
+vi.mock('helmet', () => ({ default: () => (req: any, res: any, next: any) => next() }));
 vi.mock('qrcode');
+vi.mock('express');
+vi.mock('http');
 vi.mock('ws');
 vi.mock('./services/claude-service');
 vi.mock('./services/session-manager');
@@ -64,18 +64,8 @@ describe('VibeCoderHost', () => {
       destroy: vi.fn(),
     };
 
-    // Mock WebSocket server
-    const mockWSS = {
-      on: vi.fn(),
-      close: vi.fn(),
-    };
-
-    // Setup express and createServer mocks
-    vi.mocked(express).mockReturnValue(mockExpress as any);
-    vi.doMock('http', () => ({
-      createServer: vi.fn(() => mockServer),
-    }));
-    vi.mocked(WebSocketServer).mockReturnValue(mockWSS as any);
+    // Clear all mocks
+    vi.clearAllMocks();
 
     // Mock constructor dependencies
     vi.doMock('./services/session-manager', () => ({

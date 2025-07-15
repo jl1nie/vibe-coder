@@ -20,23 +20,23 @@ echo "Setting up runtime user with UID:$USER_UID, GID:$USER_GID"
 if getent passwd $USER_UID > /dev/null 2>&1; then
     EXISTING_USER=$(getent passwd $USER_UID | cut -d: -f1)
     echo "Removing existing user: $EXISTING_USER (UID: $USER_UID)"
-    deluser $EXISTING_USER 2>/dev/null || true
+    userdel $EXISTING_USER 2>/dev/null || true
 fi
 
 # 指定されたGIDのグループが存在する場合は削除
 if getent group $USER_GID > /dev/null 2>&1; then
     EXISTING_GROUP=$(getent group $USER_GID | cut -d: -f1)
     echo "Removing existing group: $EXISTING_GROUP (GID: $USER_GID)"
-    delgroup $EXISTING_GROUP 2>/dev/null || true
+    groupdel $EXISTING_GROUP 2>/dev/null || true
 fi
 
 # 新しいグループを作成
 echo "Creating group: vibecoder (GID: $USER_GID)"
-addgroup -g $USER_GID -S vibecoder
+groupadd -g $USER_GID vibecoder || true
 
 # 新しいユーザーを作成
 echo "Creating user: vibecoder (UID: $USER_UID, GID: $USER_GID)"
-adduser -S vibecoder -u $USER_UID -G vibecoder
+useradd -u $USER_UID -g $USER_GID -d /home/vibecoder -m -s /bin/bash vibecoder || true
 
 # ユーザーにディレクトリ所有権を付与
 echo "Setting ownership of application directories for vibecoder"
@@ -62,4 +62,4 @@ export USER=vibecoder
 export HOME=/home/vibecoder
 
 # 指定されたユーザーでアプリケーションを実行
-exec su-exec $USER_UID:$USER_GID "$@"
+exec gosu $USER_UID:$USER_GID "$@"

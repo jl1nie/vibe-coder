@@ -32,16 +32,14 @@ class VibeCoderHost {
     this.server = createServer(this.app);
     this.sessionManager = new SessionManager();
     this.claudeService = new ClaudeService();
-    this.webrtcService = new WebRTCService(
-      this.sessionManager,
-      this.claudeService
-    );
+    this.webrtcService = new WebRTCService(this.sessionManager);
 
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
     this.setupWebSocket();
     this.setupCleanupTimer();
+    this.setupStatusMonitoring();
   }
 
   private setupMiddleware(): void {
@@ -593,9 +591,63 @@ class VibeCoderHost {
     setInterval(
       () => {
         this.webrtcService.cleanupInactiveConnections();
+        // ClaudeServiceはクリーンアップ不要（stateless）
       },
       5 * 60 * 1000
     );
+  }
+
+  private setupStatusMonitoring(): void {
+    // 15分間隔で詳細ステータスログ出力
+    setInterval(
+      () => {
+        this.webrtcService.logDetailedStatus();
+        this.logSystemStatus();
+      },
+      15 * 60 * 1000
+    );
+  }
+
+  private logSystemStatus(): void {
+    const memUsage = process.memoryUsage();
+    const uptime = process.uptime();
+
+    logger.info('System Status Report', {
+      uptime: {
+        seconds: Math.round(uptime),
+        formatted: this.formatUptime(uptime)
+      },
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024 * 100) / 100, // MB
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024 * 100) / 100, // MB
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024 * 100) / 100, // MB
+        external: Math.round(memUsage.external / 1024 / 1024 * 100) / 100 // MB
+      },
+      sessions: {
+        active: this.sessionManager.getActiveSessions().length,
+        total: this.sessionManager.getActiveSessions().length
+      },
+      environment: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch
+      }
+    });
+  }
+
+  private formatUptime(seconds: number): string {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+    
+    return parts.join(' ');
   }
 
   private handleWebSocketMessage(ws: WebSocket, data: any): void {
@@ -613,13 +665,65 @@ class VibeCoderHost {
         );
         break;
 
+      case 'session-join':
+        ws.send(JSON.stringify({ 
+          type: 'session-joined', 
+          sessionId: data.sessionId,
+          clientId: data.clientId,
+          success: true 
+        }));
+        break;
+
+      case 'offer':
+      case 'answer':
+      case 'ice-candidate':
+        // WebRTC signaling is now handled via standalone WebSocket signaling server
+        logger.warn('WebRTC signaling received on direct WebSocket - should use signaling server', { type: data.type });
+        ws.send(JSON.stringify({ 
+          error: 'WebRTC signaling is handled via separate signaling server',
+          signalingServerUrl: 'ws://localhost:5174/api/ws/signaling'
+        }));
+        break;
+
       default:
         logger.warn('Unknown WebSocket message type', { type: data.type });
         ws.send(JSON.stringify({ error: 'Unknown message type' }));
     }
   }
 
+  private async initializeWebSocketSignaling(): Promise<void> {
+    try {
+      const signalingConfig = {
+        signalingUrl: hostConfig.signalingUrl,
+        signalingWsPath: hostConfig.signalingWsPath,
+        signalingConnectionTimeout: hostConfig.signalingConnectionTimeout,
+        signalingHeartbeatInterval: hostConfig.signalingHeartbeatInterval,
+        hostId: this.sessionManager.getHostId(),
+        webrtcStunServers: hostConfig.webrtcStunServers,
+        webrtcTurnServers: hostConfig.webrtcTurnServers,
+      };
+
+      logger.info('Initializing WebSocket signaling', { config: signalingConfig });
+      
+      const connected = await this.webrtcService.initializeSignaling(signalingConfig);
+      
+      if (connected) {
+        logger.info('WebSocket signaling initialized successfully');
+      } else {
+        logger.warn('WebSocket signaling initialization failed - continuing without signaling');
+      }
+    } catch (error) {
+      logger.error('Failed to initialize WebSocket signaling', { 
+        error: (error as Error).message 
+      });
+      // Continue without signaling - the service will handle fallback
+    }
+  }
+
   public async start(): Promise<void> {
+    // Initialize WebSocket signaling
+    await this.initializeWebSocketSignaling();
+
     return new Promise((resolve, reject) => {
       this.server.on('error', (error: any) => {
         logger.error('Server error', {

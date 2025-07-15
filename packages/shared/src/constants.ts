@@ -1,23 +1,9 @@
-function getRequiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`FATAL: Required environment variable ${key} is not set`);
-  }
-  return value;
-}
+// New architecture: Runtime URL detection instead of environment variables
+// PWA is served from signaling server, so no separate URLs needed
 
-
-export const SIGNALING_SERVER_URL = process.env.NODE_ENV === 'test' 
-  ? 'http://localhost:5174/api/signal'
-  : getRequiredEnv('VIBE_CODER_SIGNALING_URL');
-
-export const PWA_URL = process.env.NODE_ENV === 'test'
-  ? 'http://localhost:5174' 
-  : getRequiredEnv('VIBE_CODER_PWA_URL');
-
-export const HOST_URL = process.env.NODE_ENV === 'test'
-  ? 'http://localhost:8080'
-  : getRequiredEnv('VIBE_CODER_HOST_URL');
+export const SIGNALING_SERVER_URL = 'auto-detected'; // Will be set to window.location.origin in browser
+export const PWA_URL = 'auto-detected'; // Will be set to window.location.origin in browser
+export const HOST_URL = 'auto-detected'; // Will be detected based on environment
 
 export const WEBRTC_CONFIG = {
   iceServers: [

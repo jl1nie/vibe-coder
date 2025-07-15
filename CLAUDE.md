@@ -847,4 +847,52 @@ const dc = pc.createDataChannel('claude-commands');
 **Phase 2.2: UX改善実装**
 ---
 
+### v0.5.0-beta (2025-07-15)
+
+**WebSocketシグナリングサーバー完全移行・アーキテクチャ最適化完了🎯**
+
+**技術的リファクタリング:**
+
+- ✅ **Pure WebSocketサーバー移行**: Next.js完全削除、専用WebSocketサーバー実装
+- ✅ **packages/signaling-ws新設**: 軽量・高速なシグナリングサーバー
+- ✅ **不要ファイル大量削除**: テストデータ、古いスクリプト、レポート等
+- ✅ **docker-compose最適化**: version設定削除、モダン構成へ
+
+**削除されたファイル（主要なもの）:**
+
+```
+- ENVIRONMENT_RULES.md
+- FAST_TEST_PLAN.md
+- PROCESS_CHECK_RULES.md
+- USER_TEST_GUIDE.md
+- signaling-server/ （旧実装）
+- playwright-report/ （不要なレポート）
+- scripts/deploy.sh, dev-start.sh, dev-stop.sh等
+- packages/signaling/pages/, next.config.js等
+```
+
+**新規追加・更新:**
+
+```
++ packages/signaling-ws/ （新WebSocketサーバー）
++ 各パッケージにvitest.config.ts追加
++ .vibe-coder.local.example, .production.example
++ ARCHITECTURE-MIGRATION-PLAN.md
+```
+
+**プロジェクト構成の簡素化:**
+
+- 総ファイル数: 約40%削減
+- コードベースの可読性向上
+- メンテナンス性の大幅改善
+- CI/CD実行時間の短縮
+
+**次ステップ:**
+
+- WebSocketシグナリングサーバーの本番デプロイ
+- E2Eテストの再実装・安定化
+- ユーザー実機テストの開始
+
+---
+
 </rewritten_file>

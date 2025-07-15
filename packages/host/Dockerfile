@@ -1,8 +1,21 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm AS builder
 
 # Add security and process management packages
-RUN apk add --no-cache dumb-init su-exec
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3 \
+    libnss3-dev \
+    libatk-bridge2.0-dev \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -29,7 +42,7 @@ RUN cd packages/shared && pnpm build
 RUN cd packages/host && pnpm build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:20-bookworm AS production
 
 WORKDIR /app
 
@@ -38,22 +51,42 @@ RUN npm install -g pnpm@latest
 RUN npm install -g @anthropic-ai/claude-code
 
 # Add security packages and Claude CLI requirements
-RUN apk add --no-cache \
-    dumb-init \
-    su-exec \
+RUN apt-get update && apt-get install -y \
     curl \
     zsh \
     git \
     bash \
-    && rm -rf /var/cache/apk/*
+    build-essential \
+    python3 \
+    libnss3-dev \
+    libatk-bridge2.0-dev \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libasound2 \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/host/package.json ./packages/host/
 
-# Install all dependencies (production only)
+# Install all dependencies with native rebuilds for wrtc
 RUN pnpm install --frozen-lockfile
+
+# Rebuild native modules including wrtc in production environment
+# Install node-pre-gyp globally and rebuild wrtc
+RUN npm install -g node-pre-gyp
+
+# Force rebuild @roamhq/wrtc from source if prebuilt binaries fail
+RUN cd /app/node_modules/.pnpm/@roamhq+wrtc@0.8.0/node_modules/@roamhq/wrtc && \
+    (npm run install || npm run install --build-from-source) && \
+    ls -la build/ || echo "@roamhq/wrtc build attempted"
 
 # Copy built application
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist

@@ -1,0 +1,38 @@
+{
+  "name": "@vibe-coder/signaling-ws",
+  "version": "1.0.0",
+  "description": "WebSocket-only signaling server for Vibe Coder WebRTC connections",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/ws": "^8.5.10",
+    "@types/cors": "^2.8.17",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.18.1",
+    "@typescript-eslint/parser": "^6.18.1"
+  },
+  "keywords": [
+    "websocket",
+    "webrtc",
+    "signaling",
+    "p2p"
+  ],
+  "author": "Vibe Coder Team",
+  "license": "MIT"
+}
