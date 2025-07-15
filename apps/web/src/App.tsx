@@ -135,11 +135,12 @@ const initialState: AppState = {
 };
 
 const App: React.FC = () => {
-  // Server URLs configuration - Runtime environment detection
+  // Server URLs configuration - Use environment variables or defaults
   // WebSocket signaling server URL
-  const SIGNALING_URL = window.location.origin.includes('localhost')
-    ? 'ws://localhost:5175'
-    : 'wss://signaling.vibe-coder.space';
+  const SIGNALING_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
+    (window.location.origin.includes('localhost')
+      ? 'ws://172.20.243.72:5175'
+      : 'wss://signaling.vibe-coder.space');
 
   const [state, setState] = useState<AppState>(initialState);
   const terminalRef = useRef<HTMLDivElement>(null);

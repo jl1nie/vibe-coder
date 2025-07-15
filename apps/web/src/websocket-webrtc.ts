@@ -16,24 +16,30 @@ export interface WebRTCConfig {
 }
 
 interface SignalingMessage {
-  type: 'register-host' | 'join-session' | 'offer' | 'answer' | 'ice-candidate' | 'heartbeat';
+  type: 'register-host' | 'join-session' | 'offer' | 'answer' | 'ice-candidate' | 'heartbeat' | 'webrtc-offer' | 'webrtc-answer' | 'connect-to-host' | 'verify-totp';
   sessionId: string;
   clientId: string;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  jwtToken?: string;
+  hostId?: string;
+  totpCode?: string;
   timestamp: number;
 }
 
 interface SignalingResponse {
-  type: 'session-created' | 'session-joined' | 'offer-received' | 'answer-received' | 'candidate-received' | 'success' | 'error';
-  sessionId: string;
+  type: 'session-created' | 'session-joined' | 'offer-received' | 'answer-received' | 'candidate-received' | 'success' | 'error' | 'host-found' | 'host-authenticated' | 'totp-required' | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received' | 'connected';
+  sessionId?: string;
   clientId?: string;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
   message?: string;
   error?: string;
+  jwtToken?: string;
+  webrtcReady?: boolean;
+  tokenExpiry?: number;
   timestamp: number;
 }
 
@@ -48,10 +54,30 @@ export class WebRTCManager {
   };
   private ws: WebSocket | null = null;
   private clientId: string;
+  private authToken: string | null = null;
 
   constructor(config: WebRTCConfig) {
     this.config = config;
     this.clientId = `pwa-${config.sessionId}`;
+  }
+
+  /**
+   * Set JWT authentication token for WebRTC messages
+   */
+  setAuthToken(token: string): void {
+    this.authToken = token;
+  }
+
+  /**
+   * Validate JWT token for WebRTC messages
+   */
+  private validateJWTForWebRTC(): boolean {
+    if (!this.authToken) {
+      console.error('❌ JWT token required for WebRTC messages');
+      this.config.onError?.('Authentication required for WebRTC connection');
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -61,10 +87,8 @@ export class WebRTCManager {
     try {
       console.log('🔐 Starting host authentication via signaling');
       
-      // Build WebSocket URL for signaling server
-      const signalingUrl = this.config.signalingUrl.includes('localhost') 
-        ? 'ws://localhost:5175' 
-        : 'wss://signaling.vibe-coder.space';
+      // Use signaling URL from config
+      const signalingUrl = this.config.signalingUrl;
       
       // Connect to signaling server for authentication
       await this.connectSignaling(signalingUrl);
@@ -81,11 +105,11 @@ export class WebRTCManager {
             const message = JSON.parse(event.data);
             console.log('📨 Auth response:', message);
             
-            if (message.type === 'totp-required') {
+            if (message.type === 'host-found') {
               clearTimeout(authTimeout);
               resolve({
                 sessionId: message.sessionId,
-                message: message.message || 'Host ID verified. Please enter TOTP code.'
+                message: message.message || 'Host found. Proceed with TOTP authentication'
               });
             } else if (message.type === 'error') {
               clearTimeout(authTimeout);
@@ -100,10 +124,11 @@ export class WebRTCManager {
         if (this.ws) {
           this.ws.addEventListener('message', handleAuthResponse);
           
-          // Send authentication request
+          // Send authentication request (WEBRTC_PROTOCOL.md compliant)
           this.ws.send(JSON.stringify({
-            type: 'authenticate-host',
+            type: 'connect-to-host',
             hostId,
+            clientId: this.clientId,
             timestamp: Date.now()
           }));
           
@@ -147,8 +172,14 @@ export class WebRTCManager {
             
             if (message.type === 'host-authenticated') {
               clearTimeout(verifyTimeout);
+              
+              // Store JWT token for WebRTC messages
+              if (message.jwtToken) {
+                this.setAuthToken(message.jwtToken);
+              }
+              
               resolve({
-                token: message.token || sessionId, // Use token or sessionId as fallback
+                token: message.jwtToken || sessionId, // Use JWT token or sessionId as fallback
                 message: message.message || 'Authentication successful'
               });
             } else if (message.type === 'error') {
@@ -194,10 +225,13 @@ export class WebRTCManager {
     try {
       console.log('🚀 Starting Native WebRTC connection with WebSocket signaling...');
       
+      // Validate JWT token before WebRTC connection
+      if (!this.validateJWTForWebRTC()) {
+        return false;
+      }
+      
       // Build WebSocket URL for signaling server (port 5175)
-      const signalingUrl = this.config.signalingUrl.includes('localhost') 
-        ? 'ws://localhost:5175' 
-        : 'wss://signaling.vibe-coder.space';
+      const signalingUrl = this.config.signalingUrl;
       
       console.log('🔗 Connecting to WebRTC signaling server:', signalingUrl);
       
@@ -205,10 +239,8 @@ export class WebRTCManager {
       await this.connectSignaling(signalingUrl);
       
       // Create native RTCPeerConnection
-      // For local Docker testing, disable STUN to match host configuration
-      const iceServers = this.config.signalingUrl.includes('localhost') 
-        ? [] // No STUN for local Docker testing 
-        : [{ urls: 'stun:stun.l.google.com:19302' }]; // STUN for production
+      // Always use STUN servers for NAT traversal (WEBRTC_PROTOCOL.md compliance)
+      const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
       
       const pc = new RTCPeerConnection({
         iceServers,
@@ -242,8 +274,9 @@ export class WebRTCManager {
       await pc.setLocalDescription(offer);
       
       await this.sendSignalingMessage({
-        type: 'offer',
+        type: 'webrtc-offer',
         sessionId: this.config.sessionId,
+        jwtToken: this.authToken || undefined,
         clientId: this.clientId,
         offer,
         timestamp: Date.now()
@@ -254,25 +287,25 @@ export class WebRTCManager {
       // Set timeout for WebRTC connection establishment
       setTimeout(() => {
         if (!this.state.isConnected) {
-          console.warn('⚠️ WebRTC connection timeout - falling back to REST API');
-          this.config.onMessage?.('\r\n⚠️ WebRTC P2P connection timeout. Using REST API fallback.\r\n');
-          this.config.onMessage?.('📡 Note: Docker environments have limited WebRTC support.\r\n');
+          console.warn('⚠️ WebRTC connection timeout');
+          this.config.onMessage?.('\r\n⚠️ WebRTC P2P connection timeout. Please check your network connection.\r\n');
+          this.config.onMessage?.('🔄 Attempting to reconnect...\r\n');
           this.config.onMessage?.('\r\nuser@localhost:~/project$ ');
           this.config.onConnectionChange?.(false);
         }
-      }, 30000); // 30 second timeout for Docker environment
+      }, 30000); // 30 second timeout
 
       return true;
 
     } catch (error) {
       console.error('❌ WebRTC connection failed:', error);
       
-      // Show degraded mode warning
-      this.config.onMessage?.('\r\n⚠️ WebRTC P2P connection failed. Falling back to REST API mode.\r\n');
-      this.config.onMessage?.('📡 You can still execute Claude Code commands via HTTP API.\r\n');
+      // Show connection failure message
+      this.config.onMessage?.('\r\n⚠️ WebRTC P2P connection failed. Please check your authentication and network.\r\n');
+      this.config.onMessage?.('🔄 You may need to re-authenticate and try again.\r\n');
       this.config.onMessage?.('\r\nuser@localhost:~/project$ ');
       
-      // Notify about degraded connection
+      // Notify about connection failure
       this.config.onConnectionChange?.(false);
       
       this.cleanup();
@@ -332,6 +365,7 @@ export class WebRTCManager {
         this.sendSignalingMessage({
           type: 'ice-candidate',
           sessionId: this.config.sessionId,
+          jwtToken: this.authToken || undefined,
           clientId: this.clientId,
           candidate: candidateData,
           timestamp: Date.now()
@@ -436,6 +470,10 @@ export class WebRTCManager {
       case 'error':
         console.error('❌ Signaling error:', message.error);
         this.config.onError?.(message.error || 'Signaling error');
+        break;
+      
+      case 'connected':
+        console.log('✅ WebSocket connected:', message.clientId);
         break;
       
       default:
