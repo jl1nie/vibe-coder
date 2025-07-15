@@ -4,6 +4,34 @@ import { SessionManager } from './session-manager';
 import { ClaudeInteractiveService } from './claude-interactive-service';
 import type { WebSocketSignalMessage, WebSocketSignalResponse } from '@vibe-coder/shared';
 
+// Extended interface for new WebRTC protocol messages
+interface ExtendedWebSocketSignalMessage {
+  type: WebSocketSignalMessage['type'] | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received';
+  sessionId: string;
+  clientId: string;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: any;
+  timestamp: number;
+  messageId?: string;
+  error?: string;
+  jwtToken?: string;
+}
+
+interface ExtendedWebSocketSignalResponse {
+  type: WebSocketSignalResponse['type'] | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received';
+  sessionId: string;
+  clientId?: string;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: any;
+  timestamp: number;
+  messageId?: string;
+  message?: string;
+  error?: string;
+  jwtToken?: string;
+}
+
 export interface WebRTCConnection {
   id: string;
   peerConnection: RTCPeerConnection;
@@ -196,7 +224,7 @@ export class WebRTCService {
   /**
    * シグナリングメッセージハンドラー
    */
-  private handleWebSocketSignalingMessage(message: WebSocketSignalResponse): void {
+  private handleWebSocketSignalingMessage(message: ExtendedWebSocketSignalResponse): void {
     logger.info('Received signaling message', { 
       type: message.type, 
       sessionId: message.sessionId,
@@ -212,7 +240,44 @@ export class WebRTCService {
       rawMessage: JSON.stringify(message).substring(0, 500)
     });
 
+    // JWT verification for WebRTC messages (Critical - WEBRTC_PROTOCOL.md compliance)
+    if (this.isWebRTCMessage(message.type)) {
+      const jwtToken = (message as any).jwtToken;
+      if (!jwtToken) {
+        logger.error('WebRTC message missing JWT token', { 
+          type: message.type, 
+          sessionId: message.sessionId 
+        });
+        return;
+      }
+      
+      // Verify JWT token
+      const jwtVerification = this.sessionManager.verifyJwtToken(jwtToken);
+      if (!jwtVerification) {
+        logger.error('Invalid JWT token for WebRTC message', { 
+          type: message.type, 
+          sessionId: message.sessionId 
+        });
+        return;
+      }
+      
+      // Verify sessionId matches JWT
+      if (jwtVerification.sessionId !== message.sessionId) {
+        logger.error('SessionId mismatch in JWT token', { 
+          messageSessionId: message.sessionId,
+          jwtSessionId: jwtVerification.sessionId 
+        });
+        return;
+      }
+      
+      logger.info('JWT verification successful for WebRTC message', { 
+        type: message.type, 
+        sessionId: message.sessionId 
+      });
+    }
+
     switch (message.type) {
+      case 'webrtc-offer-received':
       case 'offer-received':
       case 'offer':
         this.handleSignalingOffer(message.sessionId, message.offer!).catch(error => {
@@ -223,11 +288,13 @@ export class WebRTCService {
         });
         break;
       
+      case 'webrtc-answer-received':
       case 'answer-received':
       case 'answer':
         this.handleSignalingAnswer(message.sessionId, message.answer!);
         break;
       
+      case 'ice-candidate-received':
       case 'candidate-received':
       case 'ice-candidate':
         this.handleSignalingCandidate(message.sessionId, message.candidate!);
@@ -263,9 +330,26 @@ export class WebRTCService {
   }
 
   /**
+   * Check if message type is a WebRTC message that requires JWT authentication
+   */
+  private isWebRTCMessage(type: string): boolean {
+    return [
+      'webrtc-offer-received',
+      'offer-received',
+      'offer',
+      'webrtc-answer-received',
+      'answer-received',
+      'answer',
+      'ice-candidate-received',
+      'candidate-received',
+      'ice-candidate'
+    ].includes(type);
+  }
+
+  /**
    * WebSocketシグナリングメッセージ送信
    */
-  private sendSignalingMessage(message: WebSocketSignalMessage): boolean {
+  private sendSignalingMessage(message: ExtendedWebSocketSignalMessage | WebSocketSignalMessage): boolean {
     if (!this.signalingWs || this.signalingWs.readyState !== WebSocket.OPEN) {
       logger.error('WebSocket signaling not connected');
       return false;
@@ -400,9 +484,29 @@ export class WebRTCService {
       
       if (connected) {
         connection.lastActivity = new Date();
+        
+        // Use protocol-compliant session management
+        this.sessionManager.addWebRTCConnection(sessionId, id);
+        this.sessionManager.markSessionConnected(sessionId);
+        this.sessionManager.updateSessionActivity(sessionId);
+        
+        logger.info('WebRTC connection established via protocol-compliant session management', { 
+          sessionId, 
+          connectionId: id 
+        });
       } else if (peerConnection.iceConnectionState === 'failed') {
         logger.error('ICE connection failed', { sessionId, connectionId: id });
+        
+        // Use protocol-compliant session management
+        this.sessionManager.markSessionDisconnected(sessionId);
+        this.sessionManager.incrementReconnectAttempts(sessionId);
+        
         this.connections.delete(id);
+      } else if (peerConnection.iceConnectionState === 'disconnected') {
+        // Handle temporary disconnection
+        this.sessionManager.markSessionDisconnected(sessionId);
+        
+        logger.warn('WebRTC connection disconnected', { sessionId, connectionId: id });
       }
     };
 
@@ -780,10 +884,18 @@ export class WebRTCService {
       return false;
     }
 
-    const message: WebSocketSignalMessage = {
+    // Get JWT token for this session
+    const jwtToken = this.sessionManager.generateJwtToken(sessionId);
+    if (!jwtToken) {
+      logger.error('JWT token not found for session', { sessionId });
+      return false;
+    }
+
+    const message: ExtendedWebSocketSignalMessage = {
       type: 'answer',
       sessionId,
       clientId: this.signalingConfig.hostId,
+      jwtToken,
       answer,
       timestamp: Date.now()
     };
@@ -800,10 +912,18 @@ export class WebRTCService {
       return false;
     }
 
-    const message: WebSocketSignalMessage = {
+    // Get JWT token for this session
+    const jwtToken = this.sessionManager.generateJwtToken(sessionId);
+    if (!jwtToken) {
+      logger.error('JWT token not found for session', { sessionId });
+      return false;
+    }
+
+    const message: ExtendedWebSocketSignalMessage = {
       type: 'ice-candidate',
       sessionId,
       clientId: this.signalingConfig.hostId,
+      jwtToken,
       candidate,
       timestamp: Date.now()
     };

@@ -12,7 +12,6 @@ import { WebRTCService } from './services/webrtc-service';
 import { hostConfig } from './utils/config';
 import logger from './utils/logger';
 
-import { createAuthRouter } from './routes/auth';
 import { createClaudeRouter } from './routes/claude';
 import { createHealthRouter } from './routes/health';
 import { createWebRTCRouter } from './routes/webrtc';
@@ -93,7 +92,6 @@ class VibeCoderHost {
       '/api',
       createHealthRouter(this.claudeService, this.sessionManager)
     );
-    this.app.use('/api/auth', createAuthRouter(this.sessionManager));
     this.app.use(
       '/api/claude',
       createClaudeRouter(this.claudeService, this.sessionManager)
@@ -625,7 +623,8 @@ class VibeCoderHost {
       },
       sessions: {
         active: this.sessionManager.getActiveSessions().length,
-        total: this.sessionManager.getActiveSessions().length
+        total: this.sessionManager.getTotalSessions(),
+        protocolStats: this.sessionManager.getStats()
       },
       environment: {
         nodeVersion: process.version,
@@ -659,6 +658,17 @@ class VibeCoderHost {
       case 'heartbeat':
         if (data.sessionId) {
           this.sessionManager.updateSessionActivity(data.sessionId);
+          
+          // Check if re-authentication is required (30-minute rule)
+          if (this.sessionManager.requiresReAuthentication(data.sessionId)) {
+            ws.send(JSON.stringify({ 
+              type: 'reauth-required',
+              sessionId: data.sessionId,
+              reason: 'session-expired',
+              message: 'Session expired. Please re-authenticate.'
+            }));
+            return;
+          }
         }
         ws.send(
           JSON.stringify({ type: 'heartbeat-ack', timestamp: new Date() })
@@ -685,9 +695,114 @@ class VibeCoderHost {
         }));
         break;
 
+      case 'auth-request':
+        // Handle authentication request from signaling server
+        this.handleAuthRequest(ws, data);
+        break;
+
+      case 'verify-totp':
+        // Handle TOTP verification from signaling server
+        this.handleTotpVerification(ws, data);
+        break;
+
       default:
         logger.warn('Unknown WebSocket message type', { type: data.type });
         ws.send(JSON.stringify({ error: 'Unknown message type' }));
+    }
+  }
+
+  /**
+   * Handle authentication request from signaling server
+   */
+  private handleAuthRequest(ws: WebSocket, data: any): void {
+    const { sessionId, hostId, clientId } = data;
+    
+    logger.info('Authentication request received', { sessionId, hostId, clientId });
+    
+    // Verify hostId matches this host
+    if (hostId !== this.sessionManager.getHostId()) {
+      logger.warn('Authentication request for wrong host ID', { 
+        requestedHostId: hostId, 
+        actualHostId: this.sessionManager.getHostId() 
+      });
+      ws.send(JSON.stringify({
+        type: 'auth-error',
+        sessionId,
+        error: 'Invalid host ID'
+      }));
+      return;
+    }
+    
+    // Create protocol-compliant session
+    const session = this.sessionManager.createProtocolSession(sessionId);
+    logger.info('Protocol-compliant session created', { 
+      sessionId, 
+      hostId,
+      sessionCreated: !!session 
+    });
+    
+    // Send TOTP required response
+    ws.send(JSON.stringify({
+      type: 'totp-required',
+      sessionId,
+      message: 'Host ID verified. Please enter TOTP code.'
+    }));
+    
+    logger.info('TOTP verification required', { sessionId, clientId });
+  }
+
+  /**
+   * Handle TOTP verification from signaling server
+   */
+  private handleTotpVerification(ws: WebSocket, data: any): void {
+    const { sessionId, totpCode, clientId, hostId } = data;
+    
+    logger.info('TOTP verification received', { sessionId, totpCode, clientId, hostId });
+    
+    try {
+      // Use protocol-compliant TOTP verification
+      const verificationResult = this.sessionManager.verifyTotpCode(sessionId, totpCode);
+      
+      if (verificationResult) {
+        // Mark session as authenticated using protocol-compliant method
+        this.sessionManager.setAuthenticated(sessionId);
+        
+        // Generate JWT token
+        const jwtToken = this.sessionManager.generateJwtToken(sessionId);
+        
+        // Send authentication success
+        ws.send(JSON.stringify({
+          type: 'auth-success',
+          sessionId,
+          jwtToken,
+          webrtcReady: true,
+          tokenExpiry: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+          message: 'Authentication successful. WebRTC connection authorized'
+        }));
+        
+        logger.info('Authentication successful', { sessionId, clientId });
+      } else {
+        // Send authentication failure
+        ws.send(JSON.stringify({
+          type: 'auth-error',
+          sessionId,
+          error: 'Invalid TOTP code'
+        }));
+        
+        logger.warn('Authentication failed', { sessionId, clientId, error: 'Invalid TOTP code' });
+      }
+    } catch (error) {
+      logger.error('TOTP verification error', { 
+        sessionId, 
+        clientId, 
+        error: (error as Error).message 
+      });
+      
+      ws.send(JSON.stringify({
+        type: 'auth-error',
+        sessionId,
+        error: 'Authentication service error'
+      }));
     }
   }
 

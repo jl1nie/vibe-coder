@@ -20,9 +20,10 @@ export function createHealthRouter(
     const memUsage = process.memoryUsage();
     const uptime = process.uptime();
     
-    // Get session information
+    // Get session information using both legacy and protocol-compliant methods
     const activeSessions = sessionManager.getActiveSessions();
     const totalSessions = sessionManager.getTotalSessions();
+    const protocolStats = sessionManager.getStats();
     
     const health: HealthStatus = {
       status: claudeAvailable ? 'healthy' : 'degraded',
@@ -48,6 +49,7 @@ export function createHealthRouter(
     res.status(health.status === 'healthy' ? 200 : 503).json({
       ...health,
       responseTime,
+      protocolStats, // Add protocol-compliant statistics
     });
   }));
 

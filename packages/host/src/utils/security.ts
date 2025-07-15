@@ -20,8 +20,8 @@ export function validateCommand(command: string): SecurityValidationResult {
 export function sanitizeOutput(output: string): string {
   // Remove potentially sensitive information from output
   return output
-    .replace(/sk-[a-zA-Z0-9]{48}/g, '[REDACTED_API_KEY]') // Anthropic API keys
-    .replace(/ghp_[a-zA-Z0-9]{36}/g, '[REDACTED_GITHUB_TOKEN]') // GitHub tokens
+    .replace(/sk-[a-zA-Z0-9]{40,}/g, '[REDACTED_API_KEY]') // Anthropic API keys (flexible length)
+    .replace(/ghp_[a-zA-Z0-9]{36,}/g, '[REDACTED_GITHUB_TOKEN]') // GitHub tokens (flexible length)
     .replace(
       /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
       '[REDACTED_EMAIL]'
@@ -40,11 +40,11 @@ export function generateSessionSecret(): string {
 }
 
 export function isValidSessionId(sessionId: string): boolean {
-  return /^[A-Z0-9]{8}$/.test(sessionId);
+  return typeof sessionId === 'string' && /^[A-Z0-9]{8}$/.test(sessionId);
 }
 
 export function isValidHostId(hostId: string): boolean {
-  return /^[0-9]{8}$/.test(hostId);
+  return typeof hostId === 'string' && /^[0-9]{8}$/.test(hostId);
 }
 
 export function rateLimit(
