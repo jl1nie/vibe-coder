@@ -113,8 +113,26 @@ export class WebRTCService {
     this.signalingConfig = config;
     
     // Build WebSocket URL from config
-    const protocol = (config.signalingUrl.includes('localhost') || config.signalingUrl.includes('vibe-coder-signaling')) ? 'ws' : 'wss';
-    const wsUrl = `${protocol}://${config.signalingUrl}${config.signalingWsPath}`;
+    let wsUrl: string;
+    logger.debug('Building WebSocket URL', { 
+      signalingUrl: config.signalingUrl, 
+      signalingWsPath: config.signalingWsPath,
+      hasProtocol: config.signalingUrl.startsWith('ws://') || config.signalingUrl.startsWith('wss://')
+    });
+    
+    if (config.signalingUrl.startsWith('ws://') || config.signalingUrl.startsWith('wss://')) {
+      // URL already has protocol, use as-is
+      wsUrl = `${config.signalingUrl}${config.signalingWsPath}`;
+    } else {
+      // No protocol, add it based on host
+      // Use ws:// for local development (localhost, Docker bridge IPs, container names)
+      const isLocalDevelopment = config.signalingUrl.includes('localhost') || 
+                                config.signalingUrl.includes('vibe-coder-signaling') ||
+                                config.signalingUrl.includes('172.17.0.1') ||
+                                config.signalingUrl.includes('127.0.0.1');
+      const protocol = isLocalDevelopment ? 'ws' : 'wss';
+      wsUrl = `${protocol}://${config.signalingUrl}${config.signalingWsPath}`;
+    }
 
     return new Promise((resolve, reject) => {
       try {
@@ -407,27 +425,31 @@ export class WebRTCService {
       throw new Error('No WebRTC support: Specify `opts.wrtc` option in this environment');
     }
 
-    // Build ICE servers from config
+    // Build ICE servers from config (RFC 8445 compliant)
     const iceServers: RTCIceServer[] = [];
     
-    // Add STUN servers
+    // Add STUN servers for Server-reflexive candidates (RFC 8445 Section 5.1.1)
     if (this.signalingConfig?.webrtcStunServers) {
       iceServers.push(...this.signalingConfig.webrtcStunServers.map(url => ({ urls: url })));
     }
     
-    // Add TURN servers
-    if (this.signalingConfig?.webrtcTurnServers) {
-      iceServers.push(...this.signalingConfig.webrtcTurnServers.map(url => ({ urls: url })));
-    }
-    
-    // Fallback to default STUN server if none configured
+    // Fallback to default STUN servers if none configured
     if (iceServers.length === 0) {
-      iceServers.push({ urls: 'stun:stun.l.google.com:19302' });
+      iceServers.push(
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      );
     }
 
-    // Create native RTCPeerConnection (Host side - receives offer from client)
+    // Create native RTCPeerConnection with proper ICE configuration
+    // This will generate both Host candidates (local IPs) and Server-reflexive candidates (via STUN)
     const peerConnection = new wrtc.RTCPeerConnection({
-      iceServers
+      iceServers,
+      // RFC 8445 Section 2: ICE candidate gathering policy
+      iceCandidatePoolSize: 10, // Pre-gather candidates for faster connection
+      // Force gathering of all candidate types
+      bundlePolicy: 'balanced',
+      rtcpMuxPolicy: 'require'
     });
 
     const connection: WebRTCConnection = {
@@ -457,7 +479,35 @@ export class WebRTCService {
     // ICE candidate generation
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        logger.info('Sending ICE candidate via WebSocket signaling', { sessionId, connectionId: id });
+        // Log detailed ICE candidate information for RFC 8445 compliance verification
+        logger.info('ICE candidate generated (Host side)', { 
+          sessionId, 
+          connectionId: id,
+          candidate: event.candidate.candidate,
+          type: event.candidate.type,
+          protocol: event.candidate.protocol,
+          address: event.candidate.address,
+          port: event.candidate.port,
+          priority: event.candidate.priority,
+          foundation: event.candidate.foundation,
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex
+        });
+        
+        // Analyze candidate type for RFC 8445 compliance
+        const candidateStr = event.candidate.candidate;
+        let candidateType = 'unknown';
+        if (candidateStr.includes('typ host')) candidateType = 'host';
+        else if (candidateStr.includes('typ srflx')) candidateType = 'server-reflexive';
+        else if (candidateStr.includes('typ prflx')) candidateType = 'peer-reflexive';
+        else if (candidateStr.includes('typ relay')) candidateType = 'relay';
+        
+        logger.info('ICE candidate type analysis', {
+          sessionId,
+          connectionId: id,
+          candidateType,
+          candidateString: candidateStr
+        });
         
         // Convert to standard RTCIceCandidateInit format (remove non-standard properties)
         const candidateInit = {
@@ -1091,7 +1141,14 @@ export class WebRTCService {
     return {
       connected: this.signalingWs ? this.signalingWs.readyState === WebSocket.OPEN : false,
       url: this.signalingConfig ? 
-        `${(this.signalingConfig.signalingUrl.includes('localhost') || this.signalingConfig.signalingUrl.includes('vibe-coder-signaling')) ? 'ws' : 'wss'}://${this.signalingConfig.signalingUrl}${this.signalingConfig.signalingWsPath}` : 
+        (() => {
+          if (this.signalingConfig.signalingUrl.startsWith('ws://') || this.signalingConfig.signalingUrl.startsWith('wss://')) {
+            return `${this.signalingConfig.signalingUrl}${this.signalingConfig.signalingWsPath}`;
+          } else {
+            const protocol = (this.signalingConfig.signalingUrl.includes('localhost') || this.signalingConfig.signalingUrl.includes('vibe-coder-signaling')) ? 'ws' : 'wss';
+            return `${protocol}://${this.signalingConfig.signalingUrl}${this.signalingConfig.signalingWsPath}`;
+          }
+        })() : 
         undefined,
       readyState: this.signalingWs?.readyState,
       lastReconnectAttempt: this.reconnectTimeout ? new Date() : undefined

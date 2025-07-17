@@ -109,6 +109,10 @@ export class SignalingServer {
         this.signalingHandler.handleDisconnection(clientId);
       });
 
+      ws.on('open', () => {
+        console.log(`[SignalingServer] WebSocket opened for client ${clientId}`);
+      });
+
       ws.on('error', (error) => {
         console.error(`[SignalingServer] WebSocket error for client ${clientId}:`, error);
         this.signalingHandler.handleDisconnection(clientId);
@@ -118,16 +122,23 @@ export class SignalingServer {
         this.sessionManager.updateClientPing(clientId);
       });
 
-      // Send connection acknowledgment
-      try {
-        ws.send(JSON.stringify({
-          type: 'connected',
-          clientId,
-          timestamp: Date.now()
-        }));
-      } catch (error) {
-        console.error(`[SignalingServer] Failed to send connection ack to ${clientId}:`, error);
-      }
+      // Register client with SessionManager (isHost will be determined later)
+      this.sessionManager.registerClient(clientId, ws, false);
+
+      // Send connection acknowledgment with a small delay to ensure connection is fully established
+      setImmediate(() => {
+        try {
+          const connectedMessage = {
+            type: 'connected',
+            clientId,
+            timestamp: Date.now()
+          };
+          ws.send(JSON.stringify(connectedMessage));
+          console.log(`[SignalingServer] Sent connected message to ${clientId}`);
+        } catch (error) {
+          console.error(`[SignalingServer] Failed to send connection ack to ${clientId}:`, error);
+        }
+      });
     });
 
     this.wss.on('error', (error) => {

@@ -1,15 +1,45 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WebRTCService } from '../services/webrtc-service';
-import { ClaudeService } from '../services/claude-service';
+import { SessionManager } from '../services/session-manager';
 
-// Mock simple-peer
-vi.mock('simple-peer', () => ({
+// Mock @roamhq/wrtc
+vi.mock('@roamhq/wrtc', () => ({
+  RTCPeerConnection: vi.fn().mockImplementation(() => ({
+    createOffer: vi.fn(),
+    createAnswer: vi.fn(),
+    setLocalDescription: vi.fn(),
+    setRemoteDescription: vi.fn(),
+    addIceCandidate: vi.fn(),
+    createDataChannel: vi.fn(),
+    close: vi.fn(),
+    iceConnectionState: 'new',
+    signalingState: 'stable',
+    connectionState: 'new',
+    onicecandidate: null,
+    oniceconnectionstatechange: null,
+    onsignalingstatechange: null,
+    ondatachannel: null,
+    onconnectionstatechange: null,
+  })),
+}));
+
+// Mock ClaudeInteractiveService
+vi.mock('../services/claude-interactive-service', () => ({
+  ClaudeInteractiveService: vi.fn().mockImplementation(() => ({
+    createSession: vi.fn(),
+    getSession: vi.fn(),
+    sendCommand: vi.fn(),
+    destroy: vi.fn(),
+  })),
+}));
+
+// Mock WebSocket
+vi.mock('ws', () => ({
   default: vi.fn().mockImplementation(() => ({
     on: vi.fn(),
-    signal: vi.fn(),
     send: vi.fn(),
-    destroy: vi.fn(),
-    connected: false,
+    close: vi.fn(),
+    readyState: 1, // OPEN
   })),
 }));
 
@@ -19,24 +49,22 @@ vi.mock('../utils/logger', () => ({
     info: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
 describe('WebRTCService', () => {
   let webrtcService: WebRTCService;
-  let mockClaudeService: jest.Mocked<ClaudeService>;
+  let mockSessionManager: any;
 
   beforeEach(() => {
-    mockClaudeService = {
-      executeCommand: vi.fn(),
-      cancelCommand: vi.fn(),
-      getStatus: vi.fn(),
-      on: vi.fn(),
-      off: vi.fn(),
-      emit: vi.fn(),
-    } as any;
+    mockSessionManager = {
+      onAuthentication: vi.fn(),
+      getHostId: vi.fn().mockReturnValue('12345678'),
+      getAuthenticatedSessions: vi.fn().mockReturnValue(['session1', 'session2']),
+    };
 
-    webrtcService = new WebRTCService(mockClaudeService);
+    webrtcService = new WebRTCService(mockSessionManager);
     vi.clearAllMocks();
   });
 

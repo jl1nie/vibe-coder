@@ -149,7 +149,12 @@ describe('Error Middleware', () => {
       });
       const wrappedFn = asyncHandler(asyncFn);
       
-      wrappedFn(mockReq as Request, mockRes as Response, mockNext);
+      // The wrapped function should not throw - it should pass errors to next()
+      expect(() => {
+        wrappedFn(mockReq as Request, mockRes as Response, mockNext);
+      }).not.toThrow();
+      
+      // Give time for Promise.resolve().catch() to execute
       await new Promise(resolve => setTimeout(resolve, 0));
       
       expect(mockNext).toHaveBeenCalledWith(error);

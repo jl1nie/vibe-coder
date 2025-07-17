@@ -238,14 +238,18 @@ export class WebRTCManager {
       // Connect to WebSocket signaling server
       await this.connectSignaling(signalingUrl);
       
-      // Create native RTCPeerConnection
-      // Always use STUN servers for NAT traversal (WEBRTC_PROTOCOL.md compliance)
-      const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+      // Create native RTCPeerConnection with RFC 8445 compliant ICE configuration
+      // Always use STUN servers for proper Server-reflexive candidate gathering
+      const iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ];
       
       const pc = new RTCPeerConnection({
         iceServers,
-        iceCandidatePoolSize: 10,
-        iceTransportPolicy: 'all',
+        // RFC 8445 Section 2: ICE candidate gathering policy
+        iceCandidatePoolSize: 10, // Pre-gather candidates for faster connection
+        iceTransportPolicy: 'all', // Allow all types of candidates
         bundlePolicy: 'balanced',
         rtcpMuxPolicy: 'require'
       });
@@ -353,7 +357,25 @@ export class WebRTCManager {
   private setupPeerConnectionHandlers(pc: RTCPeerConnection): void {
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('🔄 Sending ICE candidate via WebSocket', event.candidate);
+        // Log detailed ICE candidate information for RFC 8445 compliance verification
+        console.log('🔄 ICE candidate generated (PWA side)', {
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex
+        });
+        
+        // Analyze candidate type for RFC 8445 compliance
+        const candidateStr = event.candidate.candidate;
+        let candidateType = 'unknown';
+        if (candidateStr.includes('typ host')) candidateType = 'host';
+        else if (candidateStr.includes('typ srflx')) candidateType = 'server-reflexive';
+        else if (candidateStr.includes('typ prflx')) candidateType = 'peer-reflexive';
+        else if (candidateStr.includes('typ relay')) candidateType = 'relay';
+        
+        console.log('🔍 ICE candidate type analysis (PWA)', {
+          candidateType,
+          candidateString: candidateStr
+        });
         
         // Ensure we send a properly formatted ICE candidate (standard RTCIceCandidateInit only)
         const candidateData = {

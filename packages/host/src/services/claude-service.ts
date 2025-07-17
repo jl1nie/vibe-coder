@@ -168,8 +168,8 @@ export class ClaudeService {
 
   public async healthCheck(): Promise<boolean> {
     try {
-      // Simple health check by running claude-code --version
-      const result = await this.runClaudeCodeCommand('health-check', 'claude-code --version');
+      // Simple health check by running claude --version
+      const result = await this.runClaudeCodeCommand('health-check', 'claude --version');
       return result.success;
     } catch (error) {
       logger.error('Claude Code health check failed', { error: (error as Error).message });

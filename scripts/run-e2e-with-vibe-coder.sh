@@ -22,11 +22,12 @@ log_error() {
 
 # Check if servers are already running
 HOST_RUNNING=$(curl -s http://localhost:8080/api/health 2>/dev/null && echo "true" || echo "false")
-SIGNALING_RUNNING=$(curl -s http://localhost:5174/ 2>/dev/null && echo "true" || echo "false")
+SIGNALING_RUNNING=$(nc -z localhost 5175 2>/dev/null && echo "true" || echo "false")
+PWA_RUNNING=$(curl -s http://localhost:5174/ 2>/dev/null && echo "true" || echo "false")
 
 STARTED_SERVERS=false
 
-if [ "$HOST_RUNNING" = "false" ] || [ "$SIGNALING_RUNNING" = "false" ]; then
+if [ "$HOST_RUNNING" = "false" ] || [ "$SIGNALING_RUNNING" = "false" ] || [ "$PWA_RUNNING" = "false" ]; then
     log_info "🚀 Starting Vibe Coder in development mode for E2E tests..."
     
     # Start Vibe Coder in development mode (background)
@@ -39,20 +40,21 @@ if [ "$HOST_RUNNING" = "false" ] || [ "$SIGNALING_RUNNING" = "false" ]; then
     # Wait for servers to be ready (max 90 seconds)
     for i in {1..90}; do
         HOST_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health 2>/dev/null)
-        SIGNALING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5174/ 2>/dev/null)
+        SIGNALING_STATUS=$(nc -z localhost 5175 2>/dev/null && echo "200" || echo "000")
+        PWA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5174/ 2>/dev/null)
         
-        if [ "$HOST_STATUS" = "200" ] && [ "$SIGNALING_STATUS" = "200" ]; then
-            log_success "✅ Vibe Coder services are ready! (Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS)"
+        if [ "$HOST_STATUS" = "200" ] && [ "$SIGNALING_STATUS" = "200" ] && [ "$PWA_STATUS" = "200" ]; then
+            log_success "✅ Vibe Coder services are ready! (Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS)"
             break
         fi
         
         if [ $((i % 15)) -eq 0 ]; then
-            log_info "   Attempt $i/90 - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS"
+            log_info "   Attempt $i/90 - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS"
         fi
         
         if [ $i -eq 90 ]; then
             log_error "❌ Vibe Coder services failed to start within 90 seconds"
-            log_error "   Final status - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS"
+            log_error "   Final status - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS"
             if [ "$STARTED_SERVERS" = "true" ]; then
                 log_info "Vibe Coder logs:"
                 tail -20 vibe-coder-test.log 2>/dev/null || echo "No logs available"

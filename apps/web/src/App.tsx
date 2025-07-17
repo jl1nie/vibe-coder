@@ -135,11 +135,11 @@ const initialState: AppState = {
 };
 
 const App: React.FC = () => {
-  // Server URLs configuration - Use environment variables or defaults
-  // WebSocket signaling server URL
-  const SIGNALING_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 
+  // Server URLs configuration - Runtime environment detection
+  // WebSocket signaling server URL (from env or fallback)
+  const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 
     (window.location.origin.includes('localhost')
-      ? 'ws://172.20.243.72:5175'
+      ? 'ws://localhost:5175'
       : 'wss://signaling.vibe-coder.space');
 
   const [state, setState] = useState<AppState>(initialState);
@@ -511,6 +511,55 @@ const App: React.FC = () => {
     }
   };
 
+  // WebRTC P2P connection initialization
+  const initializeWebRTCConnection = async () => {
+    try {
+      console.log('🔗 Initializing WebRTC P2P connection...');
+      
+      if (!state.auth.sessionId) {
+        throw new Error('Session ID is required for WebRTC connection');
+      }
+
+      // Create WebRTC manager for P2P connection
+      const webrtcManager = new WebRTCManager({
+        sessionId: state.auth.sessionId,
+        signalingUrl: SIGNALING_URL,
+        hostId: state.auth.hostId,
+        onMessage: (message: string) => {
+          console.log('📨 WebRTC message received:', message);
+          if (xtermRef.current) {
+            xtermRef.current.write(message);
+          }
+        },
+        onConnectionChange: (connected: boolean) => {
+          console.log('🔄 WebRTC connection state changed:', connected);
+          setState(prev => ({
+            ...prev,
+            connectionStatus: {
+              ...prev.connectionStatus,
+              isConnected: connected,
+              status: connected ? 'connected' : 'disconnected'
+            }
+          }));
+        }
+      });
+
+      // Initialize WebRTC connection
+      await webrtcManager.connect();
+      
+      // Update state with WebRTC manager
+      setState(prev => ({
+        ...prev,
+        webrtcManager
+      }));
+      
+      console.log('✅ WebRTC P2P connection initialized successfully');
+    } catch (error) {
+      console.error('❌ WebRTC connection initialization failed:', error);
+      throw error;
+    }
+  };
+
   const handleTotpSubmit = async (totpCode: string) => {
     try {
       console.log('handleTotpSubmit called with:', totpCode);
@@ -546,6 +595,10 @@ const App: React.FC = () => {
       }));
 
       console.log('✅ TOTP verification successful via signaling');
+      
+      // **重要**: TOTP認証成功後にWebRTC P2P接続を確立
+      console.log('🔗 Starting WebRTC P2P connection after TOTP verification');
+      await initializeWebRTCConnection();
     } catch (error) {
       console.error('handleTotpSubmit error:', error);
       setState(prev => ({

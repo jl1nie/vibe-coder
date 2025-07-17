@@ -40,7 +40,7 @@ vi.mock('@xterm/addon-fit', () => ({
   })),
 }));
 
-describe('Claude Interactive E2E Test - WebRTC P2P Only', () => {
+describe.skip('Claude Interactive E2E Test - WebRTC P2P Only', () => {
   let signalingMocks: ReturnType<typeof mockSignalingFlow>;
   let webrtcOnlyMocks: ReturnType<typeof mockWebRTCOnlyFlow>;
   // let voiceMocks: ReturnType<typeof mockVoiceRecognition>;

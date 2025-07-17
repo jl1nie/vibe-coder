@@ -4,47 +4,132 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 vi.mock('cors', () => ({ default: () => (req: any, res: any, next: any) => next() }));
 vi.mock('helmet', () => ({ default: () => (req: any, res: any, next: any) => next() }));
 vi.mock('qrcode');
-vi.mock('express');
-vi.mock('http');
 vi.mock('ws');
-vi.mock('./services/claude-service');
-vi.mock('./services/session-manager');
-vi.mock('./services/webrtc-service');
-vi.mock('./utils/config');
-vi.mock('./utils/logger');
-vi.mock('./routes/auth');
-vi.mock('./routes/claude');
-vi.mock('./routes/health');
-vi.mock('./routes/webrtc');
-vi.mock('./middleware/error');
+
+// Mock express at the top level
+const mockExpress = {
+  use: vi.fn(),
+  get: vi.fn(),
+  listen: vi.fn(),
+};
+
+const mockExpressFunction = vi.fn(() => mockExpress);
+mockExpressFunction.json = vi.fn(() => (req: any, res: any, next: any) => next());
+mockExpressFunction.urlencoded = vi.fn(() => (req: any, res: any, next: any) => next());
+mockExpressFunction.Router = vi.fn(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn(),
+  use: vi.fn(),
+}));
+
+vi.mock('express', () => ({
+  default: mockExpressFunction,
+  Router: mockExpressFunction.Router,
+}));
+
+const mockServer = {
+  listen: vi.fn((port, host, callback) => {
+    if (callback) callback();
+  }),
+  close: vi.fn((callback) => {
+    if (callback) callback();
+  }),
+  on: vi.fn(),
+  address: vi.fn(() => ({ port: 8080, address: '0.0.0.0' })),
+};
+
+vi.mock('http', () => ({
+  createServer: vi.fn(() => mockServer),
+}));
+
+// Mock services
+vi.mock('./services/claude-service', () => ({
+  ClaudeService: vi.fn(() => ({
+    destroy: vi.fn(),
+  })),
+}));
+
+vi.mock('./services/session-manager', () => ({
+  SessionManager: vi.fn(() => ({
+    getHostId: vi.fn(() => '12345678'),
+    updateSessionActivity: vi.fn(),
+    getActiveSessions: vi.fn(() => []),
+    destroy: vi.fn(),
+  })),
+}));
+
+vi.mock('./services/webrtc-service', () => ({
+  WebRTCService: vi.fn(() => ({
+    cleanupInactiveConnections: vi.fn(),
+    logDetailedStatus: vi.fn(),
+    initializeSignaling: vi.fn(() => Promise.resolve(true)),
+    destroy: vi.fn(),
+  })),
+}));
+
+vi.mock('./utils/config', () => ({
+  hostConfig: {
+    port: 8080,
+    host: '0.0.0.0',
+    totpSecret: 'JBSWY3DPEHPK3PXP',
+    signalingUrl: 'ws://localhost:5174',
+    signalingWsPath: '/api/ws/signaling',
+    signalingConnectionTimeout: 5000,
+    signalingHeartbeatInterval: 30000,
+    webrtcStunServers: ['stun:stun.l.google.com:19302'],
+    webrtcTurnServers: [],
+  },
+}));
+
+vi.mock('./utils/logger', () => ({
+  default: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
+vi.mock('./routes/auth', () => ({
+  createAuthRouter: vi.fn(() => mockExpress),
+}));
+
+vi.mock('./routes/claude', () => ({
+  createClaudeRouter: vi.fn(() => mockExpress),
+}));
+
+vi.mock('./routes/health', () => ({
+  createHealthRouter: vi.fn(() => mockExpress),
+}));
+
+vi.mock('./routes/webrtc', () => ({
+  createWebRTCRouter: vi.fn(() => mockExpress),
+}));
+
+vi.mock('./middleware/error', () => ({
+  errorHandler: vi.fn(),
+  notFoundHandler: vi.fn(),
+}));
+
+vi.mock('qrcode', () => ({
+  default: {
+    toDataURL: vi.fn(() => Promise.resolve('data:image/png;base64,mock')),
+  },
+}));
+
+vi.mock('fs', () => ({
+  existsSync: vi.fn(() => true),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
 
 describe('VibeCoderHost', () => {
-  let mockExpress: any;
-  let mockServer: any;
   let mockSessionManager: any;
   let mockClaudeService: any;
   let mockWebRTCService: any;
 
   beforeEach(() => {
-    // Mock express app
-    mockExpress = {
-      use: vi.fn(),
-      get: vi.fn(),
-      listen: vi.fn(),
-    };
-
-    // Mock HTTP server
-    mockServer = {
-      listen: vi.fn((port, host, callback) => {
-        if (callback) callback();
-      }),
-      close: vi.fn((callback) => {
-        if (callback) callback();
-      }),
-      on: vi.fn(),
-      address: vi.fn(() => ({ port: 8080, address: '0.0.0.0' })),
-    };
-
     // Mock services
     mockSessionManager = {
       getHostId: vi.fn(() => '12345678'),
@@ -66,77 +151,6 @@ describe('VibeCoderHost', () => {
 
     // Clear all mocks
     vi.clearAllMocks();
-
-    // Mock constructor dependencies
-    vi.doMock('./services/session-manager', () => ({
-      SessionManager: vi.fn(() => mockSessionManager),
-    }));
-    vi.doMock('./services/claude-service', () => ({
-      ClaudeService: vi.fn(() => mockClaudeService),
-    }));
-    vi.doMock('./services/webrtc-service', () => ({
-      WebRTCService: vi.fn(() => mockWebRTCService),
-    }));
-
-    // Mock config
-    vi.doMock('./utils/config', () => ({
-      hostConfig: {
-        port: 8080,
-        host: '0.0.0.0',
-        totpSecret: 'JBSWY3DPEHPK3PXP',
-        signalingUrl: 'ws://localhost:5174',
-        signalingWsPath: '/api/ws/signaling',
-        signalingConnectionTimeout: 5000,
-        signalingHeartbeatInterval: 30000,
-        webrtcStunServers: ['stun:stun.l.google.com:19302'],
-        webrtcTurnServers: [],
-      },
-    }));
-
-    // Mock logger
-    vi.doMock('./utils/logger', () => ({
-      default: {
-        info: vi.fn(),
-        error: vi.fn(),
-        warn: vi.fn(),
-      },
-    }));
-
-    // Mock route creators
-    vi.doMock('./routes/auth', () => ({
-      createAuthRouter: vi.fn(() => mockExpress),
-    }));
-    vi.doMock('./routes/claude', () => ({
-      createClaudeRouter: vi.fn(() => mockExpress),
-    }));
-    vi.doMock('./routes/health', () => ({
-      createHealthRouter: vi.fn(() => mockExpress),
-    }));
-    vi.doMock('./routes/webrtc', () => ({
-      createWebRTCRouter: vi.fn(() => mockExpress),
-    }));
-
-    // Mock middleware
-    vi.doMock('./middleware/error', () => ({
-      errorHandler: vi.fn(),
-      notFoundHandler: vi.fn(),
-    }));
-
-    // Mock QRCode
-    vi.doMock('qrcode', () => ({
-      default: {
-        toDataURL: vi.fn(() => Promise.resolve('data:image/png;base64,mock')),
-      },
-    }));
-
-    // Mock fs for workspace operations
-    vi.doMock('fs', () => ({
-      existsSync: vi.fn(() => true),
-      mkdirSync: vi.fn(),
-      writeFileSync: vi.fn(),
-    }));
-
-    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -147,24 +161,29 @@ describe('VibeCoderHost', () => {
     it('should initialize all services and middleware', async () => {
       // We need to dynamically import after setting up mocks
       const { default: VibeCoderHost } = await import('../index');
+      const host = new VibeCoderHost();
 
-      expect(express).toHaveBeenCalled();
+      expect(host).toBeDefined();
       expect(mockExpress.use).toHaveBeenCalled();
     });
 
     it('should setup middleware correctly', async () => {
       const { default: VibeCoderHost } = await import('../index');
+      const host = new VibeCoderHost();
 
       // Verify middleware setup calls
       expect(mockExpress.use).toHaveBeenCalled();
+      expect(host).toBeDefined();
     });
 
     it('should setup routes correctly', async () => {
       const { default: VibeCoderHost } = await import('../index');
+      const host = new VibeCoderHost();
 
       // Verify route setup
       expect(mockExpress.use).toHaveBeenCalled();
       expect(mockExpress.get).toHaveBeenCalled();
+      expect(host).toBeDefined();
     });
   });
 

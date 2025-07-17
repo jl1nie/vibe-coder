@@ -153,57 +153,83 @@ start_dev_local() {
     
     # 既存プロセス終了
     log_info "Stopping existing processes..."
-    pkill -f "next dev.*5174" 2>/dev/null || true
-    pkill -f "node.*vibe-coder.*host" 2>/dev/null || true
+    pkill -f "vite.*5174" 2>/dev/null || true
+    # Set Docker environment variables for cleanup
+    set_docker_env
+    docker compose down 2>/dev/null || true
     sleep 2
     
     # ビルド
     log_info "Building packages..."
     pnpm build
     
-    # Host Server起動 (Docker)
-    log_info "Starting host server (Docker) on port 8080..."
+    # WebSocket Signaling Server起動 (Docker)
+    log_info "Starting WebSocket signaling server (Docker) on port 5175..."
     
-    # 環境変数を明示的に設定
-    export HOST_UID HOST_GID NODE_ENV VIBE_CODER_PORT VIBE_CODER_PWA_URL VIBE_CODER_SIGNALING_URL VIBE_CODER_HOST_URL VIBE_CODER_CLAUDE_PATH VIBE_CODER_WORKSPACE_PATH
+    # Set Docker environment variables
+    set_docker_env
     
     docker compose -f docker-compose.yml build
     docker compose -f docker-compose.yml up -d
     
-    # Signaling + PWA Server起動 (ローカル)
-    log_info "Starting signaling + PWA server on port 5174..."
-    cd packages/signaling
+    # PWA Server起動 (ローカルVite)
+    log_info "Starting PWA server on port 5174..."
+    cd apps/web
     pnpm dev &
-    SIGNALING_PID=$!
+    PWA_PID=$!
     cd ../..
     
     # 起動確認
     log_info "Waiting for services to start..."
     
-    # Host Server確認
+    # Host Server確認 (Docker healthcheck)
     for i in {1..30}; do
-        if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
+        if docker compose ps vibe-coder-host | grep -q "healthy"; then
+            log_success "Host server is running on port 8080"
+            break
+        elif curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
             log_success "Host server is running on port 8080"
             break
         fi
         sleep 2
         if [ $i -eq 30 ]; then
             log_error "Host server failed to start within 60 seconds"
-            kill $SIGNALING_PID 2>/dev/null || true
+            kill $PWA_PID 2>/dev/null || true
+            set_docker_env
+            docker compose down
             exit 1
         fi
     done
     
-    # Signaling Server確認
+    # WebSocket Signaling Server確認 (Docker healthcheck)
     for i in {1..15}; do
-        if curl -s http://localhost:5174 > /dev/null 2>&1; then
-            log_success "Signaling + PWA server is running on port 5174"
+        if docker compose ps vibe-coder-signaling | grep -q "healthy"; then
+            log_success "WebSocket signaling server is running on port 5175"
+            break
+        elif nc -z localhost 5175 > /dev/null 2>&1; then
+            log_success "WebSocket signaling server is running on port 5175"
             break
         fi
         sleep 2
         if [ $i -eq 15 ]; then
-            log_error "Signaling server failed to start within 30 seconds"
-            kill $SIGNALING_PID 2>/dev/null || true
+            log_error "WebSocket signaling server failed to start within 30 seconds"
+            kill $PWA_PID 2>/dev/null || true
+            set_docker_env
+            docker compose down
+            exit 1
+        fi
+    done
+    
+    # PWA Server確認
+    for i in {1..15}; do
+        if curl -s http://localhost:5174 > /dev/null 2>&1; then
+            log_success "PWA server is running on port 5174"
+            break
+        fi
+        sleep 2
+        if [ $i -eq 15 ]; then
+            log_error "PWA server failed to start within 30 seconds"
+            kill $PWA_PID 2>/dev/null || true
             exit 1
         fi
     done
@@ -212,6 +238,7 @@ start_dev_local() {
     echo "╔════════════════════════════════════════╗"
     echo "║          LOCAL TEST MODE               ║"
     echo "║                                        ║"
+    echo "║  WebSocket Signaling: localhost:5175   ║"
     echo "║  Host Server: http://localhost:8080    ║"
     echo "║  PWA Client:  http://localhost:5174    ║"
     echo "║                                        ║"
@@ -225,7 +252,7 @@ start_dev_local() {
     show_host_id
     
     # プロセス終了時のクリーンアップ
-    trap 'log_info "Stopping services..."; kill $SIGNALING_PID 2>/dev/null || true; docker compose down; exit 0' INT
+    trap 'log_info "Stopping services..."; kill $PWA_PID 2>/dev/null || true; set_docker_env; docker compose down; exit 0' INT
     
     # フォアグラウンドで待機
     wait
@@ -242,6 +269,35 @@ fi
 # Navigate to the script's directory to ensure paths are correct
 cd "$(dirname "$0")/.."
 
+# Function to set required Docker environment variables
+set_docker_env() {
+    export HOST_UID=$(id -u)
+    export HOST_GID=$(id -g)
+    
+    # Also export other variables if they exist
+    if [[ -n "$NODE_ENV" ]]; then
+        export NODE_ENV
+    fi
+    if [[ -n "$VIBE_CODER_PORT" ]]; then
+        export VIBE_CODER_PORT
+    fi
+    if [[ -n "$VIBE_CODER_PWA_URL" ]]; then
+        export VIBE_CODER_PWA_URL
+    fi
+    if [[ -n "$VIBE_CODER_SIGNALING_URL" ]]; then
+        export VIBE_CODER_SIGNALING_URL
+    fi
+    if [[ -n "$VIBE_CODER_HOST_URL" ]]; then
+        export VIBE_CODER_HOST_URL
+    fi
+    if [[ -n "$VIBE_CODER_CLAUDE_PATH" ]]; then
+        export VIBE_CODER_CLAUDE_PATH
+    fi
+    if [[ -n "$VIBE_CODER_WORKSPACE_PATH" ]]; then
+        export VIBE_CODER_WORKSPACE_PATH
+    fi
+}
+
 # Subcommand handling
 case "$1" in
   start)
@@ -249,10 +305,10 @@ case "$1" in
     setup_env "production"
     check_requirements
     
-    # Build and start
-    # 環境変数を明示的に設定
-    export HOST_UID HOST_GID NODE_ENV VIBE_CODER_PORT VIBE_CODER_PWA_URL VIBE_CODER_SIGNALING_URL VIBE_CODER_HOST_URL VIBE_CODER_CLAUDE_PATH VIBE_CODER_WORKSPACE_PATH
+    # Set Docker environment variables
+    set_docker_env
     
+    # Build and start
     docker compose -f docker-compose.yml build
     if [[ "$2" == "-d" ]]; then
       docker compose -f docker-compose.yml up -d
@@ -266,6 +322,8 @@ case "$1" in
     ;;
   stop)
     log_info "Stopping Vibe Coder..."
+    # Set Docker environment variables
+    set_docker_env
     # Docker containers
     docker compose down
     # Local processes
@@ -275,10 +333,14 @@ case "$1" in
     ;;
   logs)
     log_info "Following logs..."
+    # Set Docker environment variables
+    set_docker_env
     docker compose logs -f
     ;;
   status)
     log_info "Service status:"
+    # Set Docker environment variables
+    set_docker_env
     docker compose ps
     echo
     if curl -s http://localhost:8080/api/health > /dev/null 2>&1; then
@@ -293,6 +355,8 @@ case "$1" in
     ;;
   clean)
     log_info "Cleaning up environment..."
+    # Set Docker environment variables
+    set_docker_env
     docker compose down --volumes --remove-orphans
     docker system prune -f
     log_success "Cleanup complete"

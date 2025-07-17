@@ -45,8 +45,8 @@ services:
       - VIBE_CODER_HOST_URL=${VIBE_CODER_HOST_URL}
       - VIBE_CODER_CLAUDE_PATH=${VIBE_CODER_CLAUDE_PATH:-/usr/local/bin/claude}
       - VIBE_CODER_WORKSPACE_PATH=${VIBE_CODER_WORKSPACE_PATH:-/app/workspace}
-      # Disable STUN servers for local Docker testing
-      - VIBE_CODER_WEBRTC_STUN_SERVERS=
+      # Enable STUN servers for proper ICE candidate gathering (RFC 8445)
+      - VIBE_CODER_WEBRTC_STUN_SERVERS=stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
       # インタラクティブモードを有効化
       - TERM=xterm-256color
       - COLUMNS=120

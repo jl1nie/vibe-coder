@@ -454,7 +454,7 @@ describe('SignalingHandler', () => {
         connectedAt: Date.now()
       };
 
-      vi.mocked(sessionManager.getClient).mockReturnValue(mockClient);
+      (sessionManager.getClient as any).mockReturnValue(mockClient);
 
       signalingHandler.handleDisconnection(clientId);
 
@@ -479,7 +479,7 @@ describe('SignalingHandler', () => {
         connectedAt: Date.now()
       };
 
-      vi.mocked(sessionManager.getClient).mockReturnValue(mockClient);
+      (sessionManager.getClient as any).mockReturnValue(mockClient);
 
       signalingHandler.handleDisconnection(clientId);
 
@@ -488,7 +488,7 @@ describe('SignalingHandler', () => {
     });
 
     it('should handle disconnection of non-existent client', () => {
-      vi.mocked(sessionManager.getClient).mockReturnValue(undefined);
+      (sessionManager.getClient as any).mockReturnValue(undefined);
 
       signalingHandler.handleDisconnection(clientId);
 
@@ -506,7 +506,7 @@ describe('SignalingHandler', () => {
         activeClients: 2
       };
 
-      vi.mocked(sessionManager.getStats).mockReturnValue(mockSessionStats);
+      (sessionManager.getStats as any).mockReturnValue(mockSessionStats);
 
       const stats = signalingHandler.getStats();
 

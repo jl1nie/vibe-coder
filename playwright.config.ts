@@ -28,7 +28,7 @@ export default defineConfig({
   /*
   webServer: [
     {
-      command: 'cd packages/signaling && pnpm dev',
+      command: 'cd packages/signaling-ws && pnpm dev',
       url: `http://localhost:${SIGNALING_PORT}`,
       timeout: 60 * 1000,
       reuseExistingServer: true,

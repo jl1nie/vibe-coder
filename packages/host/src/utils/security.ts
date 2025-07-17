@@ -40,11 +40,17 @@ export function generateSessionSecret(): string {
 }
 
 export function isValidSessionId(sessionId: string): boolean {
-  return typeof sessionId === 'string' && /^[A-Z0-9]{8}$/.test(sessionId);
+  if (typeof sessionId !== 'string') {
+    return false;
+  }
+  return /^[A-Z0-9]{8}$/.test(sessionId);
 }
 
 export function isValidHostId(hostId: string): boolean {
-  return typeof hostId === 'string' && /^[0-9]{8}$/.test(hostId);
+  if (typeof hostId !== 'string') {
+    return false;
+  }
+  return /^[0-9]{8}$/.test(hostId);
 }
 
 export function rateLimit(

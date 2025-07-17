@@ -98,12 +98,13 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 - **Docker**: UID/GID動的設定・~/.claude自動マウント
 - **✅ 完全実装**: WebRTC P2P、Claude統合、セッション管理、Docker権限解決
 
-### WebSocketシグナリング - packages/signaling/
+### WebSocketシグナリング - packages/signaling-ws/
 
-- **Pure WebSocket**: Next.js削除・軽量WebSocketサーバー
+- **Pure WebSocket**: Node.js WebSocketサーバー（Next.js依存削除）
 - **セッション管理**: 8桁キー認証・Offer/Answer仲介
 - **P2P橋渡し**: ICE候補交換・接続確立後は非関与
 - **ステートレス**: メモリベース一時セッション管理
+- **Docker実装**: ヘルスチェック機能・5175ポート待機
 - **✅ 完全実装**: WebSocket signaling、セッション管理、自動クリーンアップ
 
 ### WebRTC設定詳細
@@ -179,7 +180,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 - **成果物**:
   - 動作するPWAクライアント
   - Dockerホスト環境
-  - Vercelシグナリングサーバー
+  - WebSocketシグナリングサーバー（Docker）
 - **完了基準**:
   - **実際にUXを確認してClaude Codeで簡単なシステムの構築ができるところまで**
   - 8桁キー + 2FA認証が動作
@@ -191,7 +192,7 @@ Vibe Coder は、スマホからワンタップで Claude Code を実行でき�
 **クライアント先行アプローチ:**
 
 1. **PWA UI実装**（モックデータでターミナル・コマンド実行）
-2. **Vercelシグナリング**（WebRTC接続テスト）
+2. **WebSocketシグナリング**（Docker WebSocket P2P接続テスト）
 3. **Dockerホスト基盤**（認証・セッション管理）
 4. **Claude Code統合**（実際のコマンド実行）
 5. **エンドツーエンド統合**（全体通信テスト）
@@ -890,11 +891,63 @@ const dc = pc.createDataChannel('claude-commands');
 - メンテナンス性の大幅改善
 - CI/CD実行時間の短縮
 
+---
+
+### v0.6.0-alpha (2025-07-17)
+
+**WebRTC P2P接続・ICE候補生成・シグナリング接続問題解決🔧**
+
+**重要な修正:**
+
+- ✅ **TOTP認証後WebRTC接続初期化**: apps/web/src/App.tsx:578で認証成功後のP2P接続確立を実装
+- ✅ **ホストサーバーWebSocketプロトコル修正**: packages/host/src/services/webrtc-service.ts:100-105でDocker bridge IP(172.17.0.1)に対しws://プロトコル使用
+- ✅ **RFC 8445準拠ICE候補収集**: STUN servers有効化・host/server-reflexive候補の適切な生成確認
+- ✅ **E2E テスト問題特定**: WebRTC P2P接続未確立によるテスト失敗の根本原因解決
+
+**技術的課題解決:**
+
+```typescript
+// 修正前: 認証のみでP2P接続なし
+const authenticateHost = async (hostId: string, totpCode: string) => {
+  // 認証のみ
+  setState(prev => ({ ...prev, auth: { ...prev.auth, isAuthenticated: true } }));
+};
+
+// 修正後: 認証成功後にWebRTC P2P接続初期化
+const authenticateHost = async (hostId: string, totpCode: string) => {
+  // 認証処理
+  setState(prev => ({ ...prev, auth: { ...prev.auth, isAuthenticated: true } }));
+  
+  // WebRTC P2P接続初期化
+  await initializeWebRTCConnection();
+};
+```
+
+**WebSocket接続問題解決:**
+
+```typescript
+// 修正前: Docker bridge IPでwss://使用（SSL handshake error）
+const protocol = config.signalingUrl.includes('localhost') ? 'ws' : 'wss';
+
+// 修正後: Docker環境でws://使用
+const isLocalDevelopment = config.signalingUrl.includes('localhost') || 
+                          config.signalingUrl.includes('vibe-coder-signaling') ||
+                          config.signalingUrl.includes('172.17.0.1') ||
+                          config.signalingUrl.includes('127.0.0.1');
+const protocol = isLocalDevelopment ? 'ws' : 'wss';
+```
+
+**ICE候補生成状況:**
+
+- ✅ **RFC 8445準拠**: STUNサーバー有効化によるserver-reflexive候補生成
+- ✅ **詳細ログ**: ICE候補タイプ（host/srflx/prflx/relay）の分析・確認機能
+- ✅ **P2P接続確立**: DataChannel open後の接続成功通知
+
 **次ステップ:**
 
-- WebSocketシグナリングサーバーの本番デプロイ
-- E2Eテストの再実装・安定化
-- ユーザー実機テストの開始
+- WebRTC P2P接続の安定性検証
+- ICE候補生成の実機テスト
+- モバイルデバイスでの接続テスト
 
 ---
 
