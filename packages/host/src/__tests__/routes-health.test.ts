@@ -23,6 +23,12 @@ describe('Health Routes', () => {
     mockSessionManager = {
       getActiveSessions: vi.fn().mockReturnValue(['session1', 'session2']),
       getTotalSessions: vi.fn().mockReturnValue(5),
+      getStats: vi.fn().mockReturnValue({
+        sessions: 2,
+        clients: 3,
+        activeSessions: 1,
+        activeClients: 2
+      }),
     };
 
     // Setup Express app
@@ -53,6 +59,12 @@ describe('Health Routes', () => {
         claude: {
           available: true,
           lastCheck: expect.any(String),
+        },
+        protocolStats: {
+          sessions: 2,
+          clients: 3,
+          activeSessions: 1,
+          activeClients: 2
         },
         responseTime: expect.any(Number),
       });

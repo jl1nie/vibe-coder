@@ -2,13 +2,6 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { WebRTCService } from '../services/webrtc-service';
 import { SessionManager } from '../services/session-manager';
 import { ClaudeService } from '../services/claude-service';
-import { 
-  setupProtocolTest,
-  ProtocolMessageValidator,
-  expectCorrectSTUNConfiguration,
-  executeClaudeCommand,
-  simulateClaudeOutput
-} from '../../../shared/src/test-utils';
 
 /**
  * WEBRTC_PROTOCOL.md準拠のHostサイドWebRTCテスト
