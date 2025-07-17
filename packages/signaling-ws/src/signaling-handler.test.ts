@@ -43,6 +43,8 @@ describe('SignalingHandler', () => {
     vi.spyOn(sessionManager, 'storeCandidate');
     vi.spyOn(sessionManager, 'updateClientPing');
     vi.spyOn(sessionManager, 'unregisterClient');
+    vi.spyOn(sessionManager, 'getStats');
+    vi.spyOn(sessionManager, 'getClient');
   });
 
   afterEach(() => {
