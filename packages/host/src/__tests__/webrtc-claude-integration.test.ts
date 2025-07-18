@@ -89,6 +89,19 @@ describe('WebRTC Data Channel Communication', () => {
     vi.mocked(ClaudeInteractiveService).mockImplementation(() => mockClaudeInteractiveService);
     
     webrtcService = new WebRTCService(sessionManager);
+    
+    // Mock the createConnection method to avoid real WebRTC
+    vi.spyOn(webrtcService, 'createConnection').mockImplementation(async (sessionId: string) => {
+      return {
+        id: `${sessionId}-${Date.now()}`,
+        peerConnection: mockPeerConnection,
+        dataChannel: mockDataChannel,
+        sessionId,
+        isConnected: false,
+        createdAt: new Date(),
+        lastActivity: new Date()
+      };
+    });
   });
 
   afterEach(() => {
@@ -265,7 +278,7 @@ describe('WebRTC Data Channel Communication', () => {
     });
 
     // Wait for async processing
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     // Verify peer received multiple responses
     expect(mockDataChannel.send).toHaveBeenCalledTimes(3);

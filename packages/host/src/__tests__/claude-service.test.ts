@@ -55,7 +55,7 @@ describe('ClaudeService', () => {
       expect(spawn).toHaveBeenCalledWith('any', ['command'], expect.any(Object));
     });
 
-    it('should accept valid claude-code commands', async () => {
+    it('should accept valid claude commands', async () => {
       // Mock successful command execution
       mockChild.on.mockImplementation((event: string, callback: (code: number) => void) => {
         if (event === 'close') {
@@ -63,11 +63,11 @@ describe('ClaudeService', () => {
         }
       });
 
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
+      const result = await claudeService.executeCommand('TEST1234', 'claude help');
       
       expect(result.success).toBe(true);
-      // Claude Code actual command call
-      expect(spawn).toHaveBeenCalledWith('claude-code', ['help'], expect.any(Object));
+      // Claude actual command call
+      expect(spawn).toHaveBeenCalledWith('claude', ['help'], expect.any(Object));
     });
   });
 
@@ -87,7 +87,7 @@ describe('ClaudeService', () => {
         }
       });
 
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
+      const result = await claudeService.executeCommand('TEST1234', 'claude help');
       
       expect(result.success).toBe(true);
       expect(result.output).toBe(mockOutput);
@@ -109,7 +109,7 @@ describe('ClaudeService', () => {
         }
       });
 
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code invalid');
+      const result = await claudeService.executeCommand('TEST1234', 'claude invalid');
       
       expect(result.success).toBe(false);
       expect(result.error).toBe(mockError);
@@ -123,7 +123,7 @@ describe('ClaudeService', () => {
         }
       });
 
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
+      const result = await claudeService.executeCommand('TEST1234', 'claude help');
       
       expect(result.success).toBe(false);
       expect(result.error).toBe('Process error');
@@ -158,7 +158,7 @@ describe('ClaudeService', () => {
 
     it('should cancel running commands', () => {
       // Simulate a running command
-      claudeService.executeCommand('TEST1234', 'claude-code help');
+      claudeService.executeCommand('TEST1234', 'claude help');
       
       const cancelled = claudeService.cancelCommand('TEST1234');
       expect(cancelled).toBe(true);
@@ -182,8 +182,8 @@ describe('ClaudeService', () => {
       const isHealthy = await claudeService.healthCheck();
       
       expect(isHealthy).toBe(true);
-      // Health check uses "claude-code --version" command
-      expect(spawn).toHaveBeenCalledWith('claude-code', ['--version'], expect.any(Object));
+      // Health check uses "claude --version" command
+      expect(spawn).toHaveBeenCalledWith('claude', ['--version'], expect.any(Object));
     });
 
     it('should return false when health check fails', async () => {
@@ -214,7 +214,7 @@ describe('ClaudeService', () => {
         }
       });
 
-      const result = await claudeService.executeCommand('TEST1234', 'claude-code help');
+      const result = await claudeService.executeCommand('TEST1234', 'claude help');
       
       // Since the output is sanitized, it should contain redacted markers
       expect(result.output).toContain('[REDACTED_API_KEY]');

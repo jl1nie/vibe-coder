@@ -4,7 +4,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 vi.mock('cors', () => ({ default: () => (req: any, res: any, next: any) => next() }));
 vi.mock('helmet', () => ({ default: () => (req: any, res: any, next: any) => next() }));
 vi.mock('qrcode');
-vi.mock('ws');
+const mockWss = {
+  on: vi.fn(),
+  emit: vi.fn(),
+  close: vi.fn(),
+};
+
+vi.mock('ws', () => ({
+  WebSocketServer: vi.fn(() => mockWss),
+}));
 
 // Mock express at the top level
 const mockExpress = {
@@ -44,29 +52,36 @@ vi.mock('http', () => ({
   createServer: vi.fn(() => mockServer),
 }));
 
+// Create service mocks that will be reused
+const mockClaudeServiceInstance = {
+  destroy: vi.fn(),
+};
+
+const mockSessionManagerInstance = {
+  getHostId: vi.fn(() => '12345678'),
+  updateSessionActivity: vi.fn(),
+  getActiveSessions: vi.fn(() => []),
+  destroy: vi.fn(),
+};
+
+const mockWebRTCServiceInstance = {
+  cleanupInactiveConnections: vi.fn(),
+  logDetailedStatus: vi.fn(),
+  initializeSignaling: vi.fn(() => Promise.resolve(true)),
+  destroy: vi.fn(),
+};
+
 // Mock services
 vi.mock('./services/claude-service', () => ({
-  ClaudeService: vi.fn(() => ({
-    destroy: vi.fn(),
-  })),
+  ClaudeService: vi.fn(() => mockClaudeServiceInstance),
 }));
 
 vi.mock('./services/session-manager', () => ({
-  SessionManager: vi.fn(() => ({
-    getHostId: vi.fn(() => '12345678'),
-    updateSessionActivity: vi.fn(),
-    getActiveSessions: vi.fn(() => []),
-    destroy: vi.fn(),
-  })),
+  SessionManager: vi.fn(() => mockSessionManagerInstance),
 }));
 
 vi.mock('./services/webrtc-service', () => ({
-  WebRTCService: vi.fn(() => ({
-    cleanupInactiveConnections: vi.fn(),
-    logDetailedStatus: vi.fn(),
-    initializeSignaling: vi.fn(() => Promise.resolve(true)),
-    destroy: vi.fn(),
-  })),
+  WebRTCService: vi.fn(() => mockWebRTCServiceInstance),
 }));
 
 vi.mock('./utils/config', () => ({
@@ -130,24 +145,10 @@ describe('VibeCoderHost', () => {
   let mockWebRTCService: any;
 
   beforeEach(() => {
-    // Mock services
-    mockSessionManager = {
-      getHostId: vi.fn(() => '12345678'),
-      updateSessionActivity: vi.fn(),
-      getActiveSessions: vi.fn(() => []),
-      destroy: vi.fn(),
-    };
-
-    mockClaudeService = {
-      destroy: vi.fn(),
-    };
-
-    mockWebRTCService = {
-      cleanupInactiveConnections: vi.fn(),
-      logDetailedStatus: vi.fn(),
-      initializeSignaling: vi.fn(() => Promise.resolve(true)),
-      destroy: vi.fn(),
-    };
+    // Reference global mock instances
+    mockSessionManager = mockSessionManagerInstance;
+    mockClaudeService = mockClaudeServiceInstance;
+    mockWebRTCService = mockWebRTCServiceInstance;
 
     // Clear all mocks
     vi.clearAllMocks();
@@ -215,6 +216,7 @@ describe('VibeCoderHost', () => {
     });
 
     it('should stop server gracefully', async () => {
+      vi.resetModules();
       const { default: VibeCoderHost } = await import('../index');
       const instance = new VibeCoderHost();
 
@@ -230,12 +232,14 @@ describe('VibeCoderHost', () => {
   describe('WebSocket Handling', () => {
     it('should setup WebSocket server', async () => {
       const { default: VibeCoderHost } = await import('../index');
+      const { WebSocketServer } = await import('ws');
 
       expect(WebSocketServer).toHaveBeenCalledWith({ server: mockServer });
     });
 
     it('should handle WebSocket connections', async () => {
       const { default: VibeCoderHost } = await import('../index');
+      const { WebSocketServer } = await import('ws');
 
       expect(WebSocketServer).toHaveBeenCalled();
       const wsServerInstance = vi.mocked(WebSocketServer).mock.results[0].value;

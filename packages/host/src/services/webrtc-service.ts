@@ -926,6 +926,69 @@ export class WebRTCService {
   }
 
   /**
+   * Handle WebRTC offer with JWT verification
+   */
+  public async handleOffer(sessionId: string, offer: RTCSessionDescriptionInit, jwtToken: string): Promise<RTCSessionDescriptionInit> {
+    // Verify JWT token
+    if (!this.sessionManager.verifyJwtToken(jwtToken, sessionId)) {
+      throw new Error('Authentication failed');
+    }
+
+    // Verify session is authenticated
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session || !session.authenticated) {
+      throw new Error('Session not authenticated');
+    }
+
+    // Find or create WebRTC connection
+    let connection = Array.from(this.connections.values()).find(c => c.sessionId === sessionId);
+    if (!connection) {
+      connection = await this.createConnection(sessionId);
+    }
+
+    // Set remote description (offer)
+    await connection.peerConnection.setRemoteDescription(offer);
+
+    // Create answer
+    const answer = await connection.peerConnection.createAnswer();
+    await connection.peerConnection.setLocalDescription(answer);
+
+    logger.info('WebRTC offer processed and answer created', {
+      sessionId,
+      connectionId: connection.id,
+      offerType: offer.type,
+      answerType: answer.type
+    });
+
+    return answer;
+  }
+
+  /**
+   * Handle ICE candidate with JWT verification
+   */
+  public async handleIceCandidate(sessionId: string, candidate: RTCIceCandidateInit, jwtToken: string): Promise<void> {
+    // Verify JWT token
+    if (!this.sessionManager.verifyJwtToken(jwtToken, sessionId)) {
+      throw new Error('Authentication failed');
+    }
+
+    // Find WebRTC connection
+    const connection = Array.from(this.connections.values()).find(c => c.sessionId === sessionId);
+    if (!connection) {
+      throw new Error('Connection not found');
+    }
+
+    // Add ICE candidate
+    await connection.peerConnection.addIceCandidate(candidate);
+
+    logger.info('ICE candidate processed', {
+      sessionId,
+      connectionId: connection.id,
+      candidate: candidate.candidate
+    });
+  }
+
+  /**
    * AnswerをWebSocketシグナリング経由で送信
    */
   public sendAnswer(sessionId: string, answer: RTCSessionDescriptionInit): boolean {

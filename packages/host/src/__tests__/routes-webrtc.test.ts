@@ -355,7 +355,7 @@ describe('WebRTC Routes', () => {
 
   describe('Logging', () => {
     it('should log successful connection start', async () => {
-      const logger = require('../utils/logger').default;
+      const logger = await import('../utils/logger');
       const mockConnection = {
         id: 'conn-123',
         sessionId: 'test-session',
@@ -380,7 +380,7 @@ describe('WebRTC Routes', () => {
         .send({ sessionId: 'test-session' })
         .expect(200);
 
-      expect(logger.info).toHaveBeenCalledWith('WebRTC connection started', {
+      expect(logger.default.info).toHaveBeenCalledWith('WebRTC connection started', {
         sessionId: 'test-session',
         connectionId: 'conn-123',
         hostId: '12345678',
@@ -388,7 +388,7 @@ describe('WebRTC Routes', () => {
     });
 
     it('should log errors', async () => {
-      const logger = require('../utils/logger').default;
+      const logger = await import('../utils/logger');
 
       mockWebRTCService.getConnectionBySessionId.mockImplementation(() => {
         throw new Error('Test error');
@@ -398,7 +398,7 @@ describe('WebRTC Routes', () => {
         .get('/api/webrtc/status/test-session')
         .expect(500);
 
-      expect(logger.error).toHaveBeenCalledWith('Failed to get WebRTC connection status', {
+      expect(logger.default.error).toHaveBeenCalledWith('Failed to get WebRTC connection status', {
         error: 'Test error',
       });
     });
