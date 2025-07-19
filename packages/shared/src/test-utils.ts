@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, expect } from 'vitest';
 
 /**
  * Test utilities for WebRTC protocol compliance tests

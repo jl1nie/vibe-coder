@@ -29,38 +29,44 @@ export class SignalingHandler {
     try {
       const message: SignalingMessage = JSON.parse(rawMessage);
       console.log(`[SignalingHandler] Received message from ${clientId}:`, message.type);
+      console.log(`[SignalingHandler] Full message:`, JSON.stringify(message));
 
       switch (message.type) {
+        // Phase 1: 認証フロー (4メッセージ)
         case 'register-host':
-          this.handleRegisterHost(clientId, message as RegisterHostMessage, ws);
+          console.log(`[SignalingHandler] Calling handleRegisterHost for ${clientId}`);
+          this.handleRegisterHost(clientId, message, ws);
           break;
 
-        case 'join-session':
-          this.handleJoinSession(clientId, message as JoinSessionMessage, ws);
-          break;
-
-        case 'offer':
-          this.handleOffer(clientId, message as OfferMessage, ws);
-          break;
-
-        case 'answer':
-          this.handleAnswer(clientId, message as AnswerMessage, ws);
-          break;
-
-        case 'ice-candidate':
-          this.handleIceCandidate(clientId, message as IceCandidateMessage, ws);
-          break;
-
-        case 'heartbeat':
-          this.handleHeartbeat(clientId, message as HeartbeatMessage, ws);
-          break;
-
-        case 'authenticate-host':
-          this.handleAuthenticateHost(clientId, message as AuthenticateHostMessage, ws);
+        case 'connect-to-host':
+          console.log(`[SignalingHandler] Calling handleConnectToHost for ${clientId}`);
+          this.handleConnectToHost(clientId, message, ws);
           break;
 
         case 'verify-totp':
-          this.handleVerifyTotp(clientId, message as VerifyTotpMessage, ws);
+          this.handleVerifyTotp(clientId, message, ws);
+          break;
+
+        case 'auth-success':
+          this.handleAuthSuccess(clientId, message, ws);
+          break;
+
+        // Phase 2: WebRTC確立 (3メッセージ)
+        case 'webrtc-offer':
+          this.handleWebRTCOffer(clientId, message, ws);
+          break;
+
+        case 'webrtc-answer':
+          this.handleWebRTCAnswer(clientId, message, ws);
+          break;
+
+        case 'ice-candidate':
+          this.handleIceCandidate(clientId, message, ws);
+          break;
+
+        // 共通メッセージ (1メッセージ)
+        case 'heartbeat':
+          this.handleHeartbeat(clientId, message, ws);
           break;
 
         default:
@@ -74,127 +80,32 @@ export class SignalingHandler {
   }
 
   /**
-   * Handle host registration
+   * Handle host registration (シンプルプロトコル)
    */
-  private handleRegisterHost(clientId: string, message: RegisterHostMessage, ws: any): void {
-    const { sessionId, hostId } = message;
+  private handleRegisterHost(clientId: string, message: any, ws: any): void {
+    const { hostId } = message;
 
-    if (!sessionId || !hostId) {
-      this.sendError(clientId, 'Missing sessionId or hostId for host registration');
+    if (!hostId) {
+      this.sendError(clientId, 'Missing hostId for host registration');
       return;
     }
 
     // Register client as host
     this.sessionManager.registerClient(clientId, ws, true);
-    this.sessionManager.updateClientSession(clientId, sessionId);
-
-    // Create or get session
-    let session = this.sessionManager.getSession(sessionId);
-    if (!session) {
-      session = this.sessionManager.createSession(sessionId, hostId);
-    }
+    
+    // Store hostId for this client
+    this.sessionManager.setHostId(clientId, hostId);
 
     // Send success response
-    this.sendSuccess(clientId, 'host-registered', sessionId);
-    console.log(`[SignalingHandler] Host registered: ${hostId} for session ${sessionId}`);
+    ws.send(JSON.stringify({
+      type: 'host-registered',
+      hostId,
+      message: 'Host registered successfully'
+    }));
+
+    console.log(`[SignalingHandler] Host registered: ${hostId} for client ${clientId}`);
   }
 
-  /**
-   * Handle client session join
-   */
-  private handleJoinSession(clientId: string, message: JoinSessionMessage, ws: any): void {
-    const { sessionId } = message;
-
-    if (!sessionId) {
-      this.sendError(clientId, 'Missing sessionId for session join');
-      return;
-    }
-
-    // Register client
-    this.sessionManager.registerClient(clientId, ws, false);
-    
-    // Join session
-    const success = this.sessionManager.joinSession(sessionId, clientId);
-    if (!success) {
-      this.sendError(clientId, `Session not found: ${sessionId}`);
-      return;
-    }
-
-    this.sessionManager.updateClientSession(clientId, sessionId);
-
-    // Send success response
-    this.sendSuccess(clientId, 'session-joined', sessionId, clientId);
-    
-    // Notify other clients in session about new peer
-    this.sessionManager.broadcastToSession(sessionId, {
-      type: 'peer-connected',
-      sessionId,
-      clientId,
-      timestamp: Date.now()
-    }, clientId);
-
-    console.log(`[SignalingHandler] Client ${clientId} joined session ${sessionId}`);
-  }
-
-  /**
-   * Handle WebRTC offer
-   */
-  private handleOffer(clientId: string, message: OfferMessage, ws: any): void {
-    const { sessionId, offer } = message;
-
-    if (!sessionId || !offer) {
-      this.sendError(clientId, 'Missing sessionId or offer');
-      return;
-    }
-
-    // Store offer
-    const success = this.sessionManager.storeOffer(sessionId, clientId, offer);
-    if (!success) {
-      this.sendError(clientId, `Session not found: ${sessionId}`);
-      return;
-    }
-
-    // Forward offer to other clients in session
-    this.sessionManager.broadcastToSession(sessionId, {
-      type: 'offer-received',
-      sessionId,
-      clientId,
-      offer,
-      timestamp: Date.now()
-    }, clientId);
-
-    console.log(`[SignalingHandler] Offer from ${clientId} forwarded to session ${sessionId}`);
-  }
-
-  /**
-   * Handle WebRTC answer
-   */
-  private handleAnswer(clientId: string, message: AnswerMessage, ws: any): void {
-    const { sessionId, answer } = message;
-
-    if (!sessionId || !answer) {
-      this.sendError(clientId, 'Missing sessionId or answer');
-      return;
-    }
-
-    // Store answer
-    const success = this.sessionManager.storeAnswer(sessionId, clientId, answer);
-    if (!success) {
-      this.sendError(clientId, `Session not found: ${sessionId}`);
-      return;
-    }
-
-    // Forward answer to other clients in session
-    this.sessionManager.broadcastToSession(sessionId, {
-      type: 'answer-received',
-      sessionId,
-      clientId,
-      answer,
-      timestamp: Date.now()
-    }, clientId);
-
-    console.log(`[SignalingHandler] Answer from ${clientId} forwarded to session ${sessionId}`);
-  }
 
   /**
    * Handle ICE candidate
@@ -288,113 +199,141 @@ export class SignalingHandler {
     this.sessionManager.sendToClient(clientId, successMessage);
   }
 
-  /**
-   * Handle Host ID authentication via signaling
-   */
-  private async handleAuthenticateHost(clientId: string, message: AuthenticateHostMessage, ws: any): Promise<void> {
-    const { hostId } = message;
 
-    if (!hostId || !/^[0-9]{8}$/.test(hostId)) {
-      this.sendError(clientId, 'Invalid Host ID format. Must be 8 digits.');
+  /**
+   * Handle verify-totp (シンプルプロトコル)
+   */
+  private async handleVerifyTotp(clientId: string, message: any, ws: any): Promise<void> {
+    const { sessionId, totpCode } = message;
+
+    if (!sessionId || !totpCode) {
+      this.sendError(clientId, 'Missing sessionId or totpCode in verify-totp message');
       return;
     }
 
-    try {
-      // Forward authentication request to host server
-      const hostClients = this.sessionManager.getHostClients();
-      let targetHost = null;
-
-      // Find host with matching hostId
-      for (const [hostClientId, client] of hostClients) {
-        // We need to check if this host has the requested hostId
-        // For now, we'll use a simplified approach and generate a sessionId
-        if (client.isHost) {
-          targetHost = hostClientId;
-          break;
-        }
-      }
-
-      if (!targetHost) {
-        this.sendError(clientId, `Host with ID ${hostId} not found or offline`);
-        return;
-      }
-
-      // Generate session ID for this authentication attempt
-      const sessionId = this.generateSessionId();
-      
-      // Store the authentication session
-      this.sessionManager.storeAuthSession(sessionId, clientId, hostId);
-      
-      // Send authentication request to host
-      this.sessionManager.sendToClient(targetHost, {
-        type: 'auth-request',
+    // ホストにTOTP認証を転送
+    const hostPeer = this.sessionManager.findHostBySession(sessionId);
+    if (hostPeer) {
+      this.sessionManager.sendMessage(hostPeer.clientId, {
+        type: 'verify-totp',
         sessionId,
-        hostId,
-        clientId,
-        timestamp: Date.now()
+        totpCode
       });
-
-      // Respond to client with session ID and next step
-      this.sendSuccess(clientId, 'totp-required', sessionId, undefined, 
-        'Host ID verified. Please enter your 6-digit TOTP code.');
-
-      console.log(`[SignalingHandler] Authentication initiated for Host ID ${hostId}, session ${sessionId}`);
-    } catch (error) {
-      console.error(`[SignalingHandler] Authentication error:`, error);
-      this.sendError(clientId, 'Authentication service temporarily unavailable');
+    } else {
+      this.sendError(clientId, 'Host not found for TOTP verification');
     }
+
+    console.log(`[SignalingHandler] TOTP verification forwarded for session: ${sessionId}`);
   }
 
   /**
-   * Handle TOTP verification via signaling
+   * Handle connect-to-host (シンプルプロトコル)
    */
-  private async handleVerifyTotp(clientId: string, message: VerifyTotpMessage, ws: any): Promise<void> {
-    const { sessionId, totpCode } = message;
-
-    if (!sessionId || !totpCode || !/^[0-9]{6}$/.test(totpCode)) {
-      this.sendError(clientId, 'Invalid session ID or TOTP code format');
+  private handleConnectToHost(clientId: string, message: any, ws: any): void {
+    const { hostId } = message;
+    
+    console.log(`[SignalingHandler] handleConnectToHost: clientId=${clientId}, hostId=${hostId}`);
+    
+    if (!hostId) {
+      console.log(`[SignalingHandler] Missing hostId in connect-to-host message`);
+      this.sendError(clientId, 'Missing hostId in connect-to-host message');
       return;
     }
 
-    try {
-      // Get authentication session
-      const authSession = this.sessionManager.getAuthSession(sessionId);
-      if (!authSession || authSession.clientId !== clientId) {
-        this.sendError(clientId, `Invalid or expired session: ${sessionId}`);
-        return;
-      }
-
-      // Forward TOTP verification to host
-      const hostClients = this.sessionManager.getHostClients();
-      let targetHost = null;
-
-      for (const [hostClientId, client] of hostClients) {
-        if (client.isHost) {
-          targetHost = hostClientId;
-          break;
-        }
-      }
-
-      if (!targetHost) {
-        this.sendError(clientId, 'Host server offline');
-        return;
-      }
-
-      // Send TOTP verification to host
-      this.sessionManager.sendToClient(targetHost, {
-        type: 'verify-totp',
-        sessionId,
-        totpCode,
-        clientId,
-        hostId: authSession.hostId,
-        timestamp: Date.now()
-      });
-
-      console.log(`[SignalingHandler] TOTP verification sent to host for session ${sessionId}`);
-    } catch (error) {
-      console.error(`[SignalingHandler] TOTP verification error:`, error);
-      this.sendError(clientId, 'TOTP verification failed');
+    // ホストが登録されているか確認
+    const hostClient = this.sessionManager.findHostSession(hostId);
+    console.log(`[SignalingHandler] findHostSession result:`, hostClient ? 'FOUND' : 'NOT FOUND');
+    
+    if (!hostClient) {
+      console.log(`[SignalingHandler] Host not found for hostId: ${hostId}`);
+      this.sendError(clientId, 'Host not found or not available');
+      return;
     }
+
+    // セッションID生成
+    const sessionId = this.generateSessionId();
+    
+    // PWAに応答
+    ws.send(JSON.stringify({
+      type: 'host-found',
+      hostId,
+      sessionId,
+      message: 'Host found. Enter TOTP code'
+    }));
+
+    console.log(`[SignalingHandler] Host found: ${hostId} for client ${clientId}, sessionId: ${sessionId}`);
+  }
+
+  /**
+   * Handle auth-success (シンプルプロトコル)
+   */
+  private handleAuthSuccess(clientId: string, message: any, ws: any): void {
+    const { sessionId } = message;
+    
+    if (!sessionId) {
+      this.sendError(clientId, 'Missing sessionId in auth-success message');
+      return;
+    }
+
+    // PWAクライアントを見つけて認証成功を通知
+    const pwaPeer = this.sessionManager.findClientBySession(sessionId);
+    if (pwaPeer) {
+      this.sessionManager.sendMessage(pwaPeer.clientId, {
+        type: 'auth-success',
+        sessionId,
+        message: 'Authentication successful'
+      });
+    }
+
+    console.log(`[SignalingHandler] Auth success forwarded for session: ${sessionId}`);
+  }
+
+  /**
+   * Handle webrtc-offer (シンプルプロトコル)
+   */
+  private handleWebRTCOffer(clientId: string, message: any, ws: any): void {
+    const { sessionId, offer } = message;
+    
+    if (!sessionId || !offer) {
+      this.sendError(clientId, 'Missing sessionId or offer in webrtc-offer message');
+      return;
+    }
+
+    // ホストに転送
+    const hostPeer = this.sessionManager.findHostBySession(sessionId);
+    if (hostPeer) {
+      this.sessionManager.sendMessage(hostPeer.clientId, {
+        type: 'webrtc-offer',
+        sessionId,
+        offer
+      });
+    }
+
+    console.log(`[SignalingHandler] WebRTC offer forwarded for session: ${sessionId}`);
+  }
+
+  /**
+   * Handle webrtc-answer (シンプルプロトコル)
+   */
+  private handleWebRTCAnswer(clientId: string, message: any, ws: any): void {
+    const { sessionId, answer } = message;
+    
+    if (!sessionId || !answer) {
+      this.sendError(clientId, 'Missing sessionId or answer in webrtc-answer message');
+      return;
+    }
+
+    // PWAに転送
+    const pwaPeer = this.sessionManager.findClientBySession(sessionId);
+    if (pwaPeer) {
+      this.sessionManager.sendMessage(pwaPeer.clientId, {
+        type: 'webrtc-answer',
+        sessionId,
+        answer
+      });
+    }
+
+    console.log(`[SignalingHandler] WebRTC answer forwarded for session: ${sessionId}`);
   }
 
   /**

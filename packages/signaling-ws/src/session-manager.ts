@@ -411,6 +411,60 @@ export class SessionManager {
   }
 
   /**
+   * Find host session by hostId (シンプルプロトコル用)
+   */
+  findHostSession(hostId: string): ClientConnection | undefined {
+    for (const client of this.clients.values()) {
+      if (client.hostId === hostId && client.isHost) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Find client by sessionId (シンプルプロトコル用)
+   */
+  findClientBySession(sessionId: string): ClientConnection | undefined {
+    for (const client of this.clients.values()) {
+      if (client.sessionId === sessionId) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Find host client by sessionId (シンプルプロトコル用)
+   */
+  findHostBySession(sessionId: string): ClientConnection | undefined {
+    for (const client of this.clients.values()) {
+      if (client.sessionId === sessionId && client.isHost) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Send message with error handling (シンプルプロトコル用)
+   */
+  sendMessage(clientId: string, message: any): boolean {
+    return this.sendToClient(clientId, message);
+  }
+
+  /**
+   * Set hostId for client (シンプルプロトコル用)
+   */
+  setHostId(clientId: string, hostId: string): void {
+    const client = this.clients.get(clientId);
+    if (client) {
+      client.hostId = hostId;
+      this.clients.set(clientId, client);
+    }
+  }
+
+  /**
    * Stop cleanup timer and clear all data
    */
   destroy(): void {

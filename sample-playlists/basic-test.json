@@ -1,0 +1,31 @@
+{
+  "name": "基本動作テスト",
+  "description": "実機テスト用の基本的なコマンドセット",
+  "commands": [
+    {
+      "label": "接続確認",
+      "icon": "📡",
+      "command": "echo '接続成功！Vibe Coder が正常に動作しています。'"
+    },
+    {
+      "label": "日時表示",
+      "icon": "🕐",
+      "command": "date '+%Y年%m月%d日 %H:%M:%S'"
+    },
+    {
+      "label": "ディレクトリ",
+      "icon": "📁",
+      "command": "pwd && echo && ls -la"
+    },
+    {
+      "label": "システム情報",
+      "icon": "💻",
+      "command": "uname -a && echo && df -h ."
+    },
+    {
+      "label": "Claude確認",
+      "icon": "🤖",
+      "command": "claude --version"
+    }
+  ]
+}

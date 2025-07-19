@@ -19,17 +19,18 @@ interface ExtendedWebSocketSignalMessage {
 }
 
 interface ExtendedWebSocketSignalResponse {
-  type: WebSocketSignalResponse['type'] | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received';
+  type: WebSocketSignalResponse['type'] | 'verify-totp' | 'webrtc-offer' | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received';
   sessionId: string;
   clientId?: string;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: any;
-  timestamp: number;
+  timestamp?: number;
   messageId?: string;
   message?: string;
   error?: string;
   jwtToken?: string;
+  totpCode?: string;
 }
 
 export interface WebRTCConnection {
@@ -148,13 +149,11 @@ export class WebRTCService {
             this.reconnectTimeout = null;
           }
           
-          // Register this host with signaling server
+          // Register this host with signaling server (Simple Protocol)
           const hostId = this.sessionManager.getHostId();
           const registerHostMessage = {
             type: 'register-host',
-            sessionId: `host-${hostId}`,
-            hostId: hostId,
-            timestamp: Date.now()
+            hostId: hostId
           };
           
           logger.info('Registering host with signaling server', { hostId, message: registerHostMessage });
@@ -240,6 +239,65 @@ export class WebRTCService {
   }
 
   /**
+   * Handle TOTP verification (Simple Protocol)
+   */
+  private handleVerifyTotp(sessionId: string, totpCode: string): void {
+    logger.info('Handling TOTP verification', { sessionId, totpCode: '***' });
+    
+    try {
+      // Create session if it doesn't exist (for simple protocol)
+      if (!this.sessionManager.getSession(sessionId)) {
+        logger.info('Creating new session for TOTP verification', { sessionId });
+        this.sessionManager.createSessionWithId(sessionId);
+      }
+      
+      // Verify TOTP code
+      const isValid = this.sessionManager.verifyTotp(sessionId, totpCode);
+      
+      if (isValid) {
+        // Mark session as authenticated
+        this.sessionManager.setAuthenticated(sessionId);
+        
+        // Send auth-success response
+        const response = {
+          type: 'auth-success',
+          sessionId,
+          message: 'Authentication successful'
+        };
+        
+        if (this.signalingWs) {
+          this.signalingWs.send(JSON.stringify(response));
+          logger.info('TOTP verification successful, sent auth-success', { sessionId });
+        }
+      } else {
+        // Send error response
+        const response = {
+          type: 'error',
+          sessionId,
+          message: 'Invalid TOTP code'
+        };
+        
+        if (this.signalingWs) {
+          this.signalingWs.send(JSON.stringify(response));
+          logger.warn('TOTP verification failed', { sessionId });
+        }
+      }
+    } catch (error) {
+      logger.error('Error during TOTP verification', { sessionId, error: (error as Error).message });
+      
+      const response = {
+        type: 'error',
+        sessionId,
+        message: 'TOTP verification error'
+      };
+      
+      if (this.signalingWs) {
+        this.signalingWs.send(JSON.stringify(response));
+      }
+    }
+  }
+
+  /**
    * シグナリングメッセージハンドラー
    */
   private handleWebSocketSignalingMessage(message: ExtendedWebSocketSignalResponse): void {
@@ -258,43 +316,14 @@ export class WebRTCService {
       rawMessage: JSON.stringify(message).substring(0, 500)
     });
 
-    // JWT verification for WebRTC messages (Critical - WEBRTC_PROTOCOL.md compliance)
-    if (this.isWebRTCMessage(message.type)) {
-      const jwtToken = (message as any).jwtToken;
-      if (!jwtToken) {
-        logger.error('WebRTC message missing JWT token', { 
-          type: message.type, 
-          sessionId: message.sessionId 
-        });
-        return;
-      }
-      
-      // Verify JWT token
-      const jwtVerification = this.sessionManager.verifyJwtToken(jwtToken);
-      if (!jwtVerification) {
-        logger.error('Invalid JWT token for WebRTC message', { 
-          type: message.type, 
-          sessionId: message.sessionId 
-        });
-        return;
-      }
-      
-      // Verify sessionId matches JWT
-      if (jwtVerification.sessionId !== message.sessionId) {
-        logger.error('SessionId mismatch in JWT token', { 
-          messageSessionId: message.sessionId,
-          jwtSessionId: jwtVerification.sessionId 
-        });
-        return;
-      }
-      
-      logger.info('JWT verification successful for WebRTC message', { 
-        type: message.type, 
-        sessionId: message.sessionId 
-      });
-    }
+    // Simple protocol - no JWT verification needed
 
     switch (message.type) {
+      case 'verify-totp':
+        this.handleVerifyTotp(message.sessionId, (message as any).totpCode);
+        break;
+        
+      case 'webrtc-offer':
       case 'webrtc-offer-received':
       case 'offer-received':
       case 'offer':
@@ -312,9 +341,9 @@ export class WebRTCService {
         this.handleSignalingAnswer(message.sessionId, message.answer!);
         break;
       
+      case 'ice-candidate':
       case 'ice-candidate-received':
       case 'candidate-received':
-      case 'ice-candidate':
         this.handleSignalingCandidate(message.sessionId, message.candidate!);
         break;
       
@@ -347,22 +376,6 @@ export class WebRTCService {
     }
   }
 
-  /**
-   * Check if message type is a WebRTC message that requires JWT authentication
-   */
-  private isWebRTCMessage(type: string): boolean {
-    return [
-      'webrtc-offer-received',
-      'offer-received',
-      'offer',
-      'webrtc-answer-received',
-      'answer-received',
-      'answer',
-      'ice-candidate-received',
-      'candidate-received',
-      'ice-candidate'
-    ].includes(type);
-  }
 
   /**
    * WebSocketシグナリングメッセージ送信
@@ -930,13 +943,13 @@ export class WebRTCService {
    */
   public async handleOffer(sessionId: string, offer: RTCSessionDescriptionInit, jwtToken: string): Promise<RTCSessionDescriptionInit> {
     // Verify JWT token
-    if (!this.sessionManager.verifyJwtToken(jwtToken, sessionId)) {
+    if (!this.sessionManager.verifyJwtToken(jwtToken)) {
       throw new Error('Authentication failed');
     }
 
     // Verify session is authenticated
     const session = this.sessionManager.getSession(sessionId);
-    if (!session || !session.authenticated) {
+    if (!session || !session.isAuthenticated) {
       throw new Error('Session not authenticated');
     }
 
@@ -968,7 +981,7 @@ export class WebRTCService {
    */
   public async handleIceCandidate(sessionId: string, candidate: RTCIceCandidateInit, jwtToken: string): Promise<void> {
     // Verify JWT token
-    if (!this.sessionManager.verifyJwtToken(jwtToken, sessionId)) {
+    if (!this.sessionManager.verifyJwtToken(jwtToken)) {
       throw new Error('Authentication failed');
     }
 

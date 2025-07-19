@@ -16,31 +16,26 @@ export interface WebRTCConfig {
 }
 
 interface SignalingMessage {
-  type: 'register-host' | 'join-session' | 'offer' | 'answer' | 'ice-candidate' | 'heartbeat' | 'webrtc-offer' | 'webrtc-answer' | 'connect-to-host' | 'verify-totp';
-  sessionId: string;
-  clientId: string;
+  type: 'connect-to-host' | 'verify-totp' | 'webrtc-offer' | 'webrtc-answer' | 'ice-candidate' | 'heartbeat';
+  sessionId?: string;
+  hostId?: string;
+  totpCode?: string;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
-  jwtToken?: string;
-  hostId?: string;
-  totpCode?: string;
-  timestamp: number;
+  timestamp?: number;
 }
 
 interface SignalingResponse {
-  type: 'session-created' | 'session-joined' | 'offer-received' | 'answer-received' | 'candidate-received' | 'success' | 'error' | 'host-found' | 'host-authenticated' | 'totp-required' | 'webrtc-offer-received' | 'webrtc-answer-received' | 'ice-candidate-received' | 'connected';
+  type: 'host-found' | 'auth-success' | 'webrtc-answer' | 'ice-candidate' | 'error' | 'heartbeat-ack';
   sessionId?: string;
-  clientId?: string;
+  hostId?: string;
+  message?: string;
+  error?: string;
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
-  message?: string;
-  error?: string;
-  jwtToken?: string;
-  webrtcReady?: boolean;
-  tokenExpiry?: number;
-  timestamp: number;
+  timestamp?: number;
 }
 
 export class WebRTCManager {
@@ -53,32 +48,11 @@ export class WebRTCManager {
     signalingState: 'stable'
   };
   private ws: WebSocket | null = null;
-  private clientId: string;
-  private authToken: string | null = null;
 
   constructor(config: WebRTCConfig) {
     this.config = config;
-    this.clientId = `pwa-${config.sessionId}`;
   }
 
-  /**
-   * Set JWT authentication token for WebRTC messages
-   */
-  setAuthToken(token: string): void {
-    this.authToken = token;
-  }
-
-  /**
-   * Validate JWT token for WebRTC messages
-   */
-  private validateJWTForWebRTC(): boolean {
-    if (!this.authToken) {
-      console.error('❌ JWT token required for WebRTC messages');
-      this.config.onError?.('Authentication required for WebRTC connection');
-      return false;
-    }
-    return true;
-  }
 
   /**
    * Authenticate with host via WebSocket signaling
@@ -124,12 +98,10 @@ export class WebRTCManager {
         if (this.ws) {
           this.ws.addEventListener('message', handleAuthResponse);
           
-          // Send authentication request (WEBRTC_PROTOCOL.md compliant)
+          // Send authentication request (シンプルプロトコル準拠)
           this.ws.send(JSON.stringify({
             type: 'connect-to-host',
-            hostId,
-            clientId: this.clientId,
-            timestamp: Date.now()
+            hostId
           }));
           
           // Cleanup handler after response
@@ -170,16 +142,11 @@ export class WebRTCManager {
             const message = JSON.parse(event.data);
             console.log('📨 TOTP response:', message);
             
-            if (message.type === 'host-authenticated') {
+            if (message.type === 'auth-success') {
               clearTimeout(verifyTimeout);
               
-              // Store JWT token for WebRTC messages
-              if (message.jwtToken) {
-                this.setAuthToken(message.jwtToken);
-              }
-              
               resolve({
-                token: message.jwtToken || sessionId, // Use JWT token or sessionId as fallback
+                token: sessionId, // Use sessionId as token
                 message: message.message || 'Authentication successful'
               });
             } else if (message.type === 'error') {
@@ -194,12 +161,11 @@ export class WebRTCManager {
         if (this.ws) {
           this.ws.addEventListener('message', handleVerifyResponse);
           
-          // Send TOTP verification
+          // Send TOTP verification (シンプルプロトコル準拠)
           this.ws.send(JSON.stringify({
             type: 'verify-totp',
             sessionId,
-            totpCode,
-            timestamp: Date.now()
+            totpCode
           }));
           
           // Cleanup handler
@@ -224,11 +190,6 @@ export class WebRTCManager {
   async connect(): Promise<boolean> {
     try {
       console.log('🚀 Starting Native WebRTC connection with WebSocket signaling...');
-      
-      // Validate JWT token before WebRTC connection
-      if (!this.validateJWTForWebRTC()) {
-        return false;
-      }
       
       // Build WebSocket URL for signaling server (port 5175)
       const signalingUrl = this.config.signalingUrl;
@@ -266,12 +227,7 @@ export class WebRTCManager {
       this.setupDataChannelHandlers(dataChannel);
       
       // Join signaling session as client
-      await this.sendSignalingMessage({
-        type: 'join-session',
-        sessionId: this.config.sessionId,
-        clientId: this.clientId,
-        timestamp: Date.now()
-      });
+      // No need for join-session in simple protocol
       
       // Create and send offer
       const offer = await pc.createOffer();
@@ -280,10 +236,7 @@ export class WebRTCManager {
       await this.sendSignalingMessage({
         type: 'webrtc-offer',
         sessionId: this.config.sessionId,
-        jwtToken: this.authToken || undefined,
-        clientId: this.clientId,
-        offer,
-        timestamp: Date.now()
+        offer
       });
       
       console.log('📤 Offer sent via WebSocket signaling');
@@ -387,10 +340,7 @@ export class WebRTCManager {
         this.sendSignalingMessage({
           type: 'ice-candidate',
           sessionId: this.config.sessionId,
-          jwtToken: this.authToken || undefined,
-          clientId: this.clientId,
-          candidate: candidateData,
-          timestamp: Date.now()
+          candidate: candidateData
         });
       }
     };
@@ -463,30 +413,17 @@ export class WebRTCManager {
     console.log('📨 Signaling message:', message.type, message.sessionId);
     
     switch (message.type) {
-      case 'session-joined':
-        console.log('✅ Joined signaling session successfully');
-        break;
       
-      case 'offer-received':
-        if (message.offer) {
-          this.handleOfferReceived(message.offer);
-        }
-        break;
-      
-      case 'answer-received':
+      case 'webrtc-answer':
         if (message.answer) {
           this.handleAnswerReceived(message.answer);
         }
         break;
       
-      case 'candidate-received':
+      case 'ice-candidate':
         if (message.candidate) {
           this.handleCandidateReceived(message.candidate);
         }
-        break;
-      
-      case 'success':
-        console.log('✅ Signaling success:', message.message);
         break;
       
       case 'error':
@@ -494,8 +431,8 @@ export class WebRTCManager {
         this.config.onError?.(message.error || 'Signaling error');
         break;
       
-      case 'connected':
-        console.log('✅ WebSocket connected:', message.clientId);
+      case 'heartbeat-ack':
+        console.log('💓 Heartbeat acknowledged');
         break;
       
       default:
@@ -503,25 +440,6 @@ export class WebRTCManager {
     }
   }
 
-  private async handleOfferReceived(offer: RTCSessionDescriptionInit): Promise<void> {
-    const pc = this.state.peerConnection;
-    if (!pc) return;
-
-    console.log('📤 Processing received offer');
-    await pc.setRemoteDescription(offer);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    
-    await this.sendSignalingMessage({
-      type: 'answer',
-      sessionId: this.config.sessionId,
-      clientId: this.clientId,
-      answer,
-      timestamp: Date.now()
-    });
-    
-    console.log('📥 Answer sent back via WebSocket');
-  }
 
   private async handleAnswerReceived(answer: RTCSessionDescriptionInit): Promise<void> {
     const pc = this.state.peerConnection;
@@ -627,17 +545,7 @@ export class WebRTCManager {
   }
 
   cleanup(): void {
-    // Leave signaling session
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.sendSignalingMessage({
-        type: 'join-session', // Leave session message
-        sessionId: this.config.sessionId,
-        clientId: this.clientId,
-        timestamp: Date.now()
-      }).catch(() => {
-        // Ignore errors during cleanup
-      });
-    }
+    // No need for leave session in simple protocol
     
     if (this.state.dataChannel) {
       this.state.dataChannel.close();

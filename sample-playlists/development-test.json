@@ -1,0 +1,31 @@
+{
+  "name": "開発作業テスト",
+  "description": "実際の開発作業を想定したコマンドセット",
+  "commands": [
+    {
+      "label": "Git状態",
+      "icon": "🌿",
+      "command": "git status"
+    },
+    {
+      "label": "テスト実行",
+      "icon": "🧪",
+      "command": "pnpm test --run"
+    },
+    {
+      "label": "ビルド",
+      "icon": "🔨",
+      "command": "pnpm build"
+    },
+    {
+      "label": "Docker状態",
+      "icon": "🐳",
+      "command": "docker ps"
+    },
+    {
+      "label": "Claude実行",
+      "icon": "🤖",
+      "command": "claude 'Hello! 現在の時刻を教えてください。'"
+    }
+  ]
+}

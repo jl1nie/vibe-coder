@@ -72,18 +72,41 @@ export interface VerifyTotpMessage extends WebSocketMessage {
   totpCode: string;
 }
 
+export interface ConnectToHostMessage extends WebSocketMessage {
+  type: 'connect-to-host';
+  hostId: string;
+}
+
+export interface AuthSuccessMessage extends WebSocketMessage {
+  type: 'auth-success';
+  sessionId: string;
+  message?: string;
+}
+
+export interface WebRTCOfferMessage extends WebSocketMessage {
+  type: 'webrtc-offer';
+  sessionId: string;
+  offer: RTCSessionDescriptionInit;
+}
+
+export interface WebRTCAnswerMessage extends WebSocketMessage {
+  type: 'webrtc-answer';
+  sessionId: string;
+  answer: RTCSessionDescriptionInit;
+}
+
 export type SignalingMessage = 
   | RegisterHostMessage
-  | JoinSessionMessage
-  | OfferMessage
-  | AnswerMessage
   | IceCandidateMessage
   | HeartbeatMessage
   | HeartbeatAckMessage
   | ErrorMessage
   | SuccessMessage
-  | AuthenticateHostMessage
-  | VerifyTotpMessage;
+  | ConnectToHostMessage
+  | VerifyTotpMessage
+  | AuthSuccessMessage
+  | WebRTCOfferMessage
+  | WebRTCAnswerMessage;
 
 export interface SignalingSession {
   sessionId: string;
@@ -99,6 +122,7 @@ export interface SignalingSession {
 export interface ClientConnection {
   clientId: string;
   sessionId?: string;
+  hostId?: string;
   isHost: boolean;
   ws: any; // WebSocket instance
   lastPing: number;

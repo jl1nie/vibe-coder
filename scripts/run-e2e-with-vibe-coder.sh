@@ -20,71 +20,48 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if servers are already running
+# Check if test environment is already running
 HOST_RUNNING=$(curl -s http://localhost:8080/api/health 2>/dev/null && echo "true" || echo "false")
 SIGNALING_RUNNING=$(nc -z localhost 5175 2>/dev/null && echo "true" || echo "false")
 PWA_RUNNING=$(curl -s http://localhost:5174/ 2>/dev/null && echo "true" || echo "false")
 
-STARTED_SERVERS=false
-
 if [ "$HOST_RUNNING" = "false" ] || [ "$SIGNALING_RUNNING" = "false" ] || [ "$PWA_RUNNING" = "false" ]; then
-    log_info "🚀 Starting Vibe Coder in development mode for E2E tests..."
-    
-    # Start Vibe Coder in development mode (background)
-    ./scripts/vibe-coder dev > vibe-coder-test.log 2>&1 &
-    VIBE_CODER_PID=$!
-    STARTED_SERVERS=true
-    
-    log_info "⏳ Waiting for Vibe Coder services to start..."
-    
-    # Wait for servers to be ready (max 90 seconds)
-    for i in {1..90}; do
-        HOST_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health 2>/dev/null)
-        SIGNALING_STATUS=$(nc -z localhost 5175 2>/dev/null && echo "200" || echo "000")
-        PWA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5174/ 2>/dev/null)
-        
-        if [ "$HOST_STATUS" = "200" ] && [ "$SIGNALING_STATUS" = "200" ] && [ "$PWA_STATUS" = "200" ]; then
-            log_success "✅ Vibe Coder services are ready! (Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS)"
-            break
-        fi
-        
-        if [ $((i % 15)) -eq 0 ]; then
-            log_info "   Attempt $i/90 - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS"
-        fi
-        
-        if [ $i -eq 90 ]; then
-            log_error "❌ Vibe Coder services failed to start within 90 seconds"
-            log_error "   Final status - Host: $HOST_STATUS, Signaling: $SIGNALING_STATUS, PWA: $PWA_STATUS"
-            if [ "$STARTED_SERVERS" = "true" ]; then
-                log_info "Vibe Coder logs:"
-                tail -20 vibe-coder-test.log 2>/dev/null || echo "No logs available"
-                kill $VIBE_CODER_PID 2>/dev/null || true
-                ./scripts/vibe-coder stop 2>/dev/null || true
-            fi
-            exit 1
-        fi
-        sleep 1
-    done
+    log_info "🚀 Starting test environment..."
+    ./scripts/start-test-environment.sh
+    log_success "✅ Test environment ready"
 else
     log_info "🔧 Using existing running Vibe Coder services"
 fi
 
-# Function to cleanup if we started servers
+log_info "🧪 Running E2E tests..."
+
+# Run global setup and E2E tests
+pnpm exec playwright test "$@"
+TEST_EXIT_CODE=$?
+
+# Cleanup function
 cleanup() {
-    if [ "$STARTED_SERVERS" = "true" ]; then
-        log_info "🧹 Cleaning up Vibe Coder services..."
-        kill $VIBE_CODER_PID 2>/dev/null || true
-        ./scripts/vibe-coder stop 2>/dev/null || true
-        rm -f vibe-coder-test.log
-        log_success "✅ Cleanup completed"
-    fi
+    log_info "🧹 Cleaning up test environment..."
+    rm -f .test-config.json 2>/dev/null || true
+    log_success "✅ Test configuration cleaned up"
+    log_info "🎯 Test environment teardown complete"
 }
 
 # Set trap for cleanup
 trap cleanup EXIT
 
-# Run the E2E tests
-log_info "🧪 Running E2E tests..."
-npx playwright test --config=playwright.config.ts "$@"
+# Check test results
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+    log_success "🎉 All E2E tests passed!"
+else
+    log_error "❌ Some E2E tests failed (exit code: $TEST_EXIT_CODE)"
+    
+    # Show helpful information
+    echo ""
+    log_info "To open last HTML report run:"
+    echo ""
+    echo -e "  ${GREEN}pnpm exec playwright show-report${NC}"
+    echo ""
+fi
 
-log_success "🎉 E2E tests completed!"
+exit $TEST_EXIT_CODE

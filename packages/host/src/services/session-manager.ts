@@ -271,8 +271,7 @@ export class SessionManager {
    */
   public generateTotpSecret(): { base32: string; otpauth_url: string } {
     const secret = speakeasy.generateSecret({
-      name: 'Vibe Coder',
-      account: this.hostId,
+      name: `Vibe Coder (${this.hostId})`,
       issuer: 'Vibe Coder',
       length: 32
     });
@@ -528,5 +527,26 @@ export class SessionManager {
     this.sessions.set(sessionId, session);
     logger.debug('Protocol-compliant session created', { sessionId });
     return session;
+  }
+
+  /**
+   * Create session with specific ID (for simple protocol)
+   */
+  public createSessionWithId(sessionId: string): void {
+    const totpSecret = hostConfig.totpSecret;
+
+    const session: SessionData = {
+      id: sessionId,
+      hostId: this.hostId,
+      totpSecret: totpSecret,
+      isAuthenticated: false,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+    };
+
+    this.sessions.set(sessionId, session);
+    
+    logger.info('Session created with specific ID', { sessionId, hostId: this.hostId });
   }
 }

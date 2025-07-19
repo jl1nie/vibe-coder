@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// New architecture: Signaling server port
-const SIGNALING_PORT = process.env.SIGNALING_PORT || 5174;
+// Development environment ports
+const PWA_PORT = process.env.PWA_PORT || 5174; // PWA development server
+const SIGNALING_PORT = process.env.SIGNALING_PORT || 5175; // WebSocket signaling
 const HOST_PORT = process.env.HOST_PORT || 8080;
 
 export default defineConfig({
@@ -47,8 +48,13 @@ export default defineConfig({
   */
 
   use: {
-    // Use signaling server as baseURL
-    baseURL: `http://localhost:${SIGNALING_PORT}`,
+    // Use PWA development server as baseURL
+    baseURL: `http://localhost:${PWA_PORT}`,
+    
+    // Set environment variables for tests
+    extraHTTPHeaders: {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
 
     // Retry a test if its failing with enabled tracing
     trace: 'retry-with-trace',
