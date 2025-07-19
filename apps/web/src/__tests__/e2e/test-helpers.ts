@@ -109,7 +109,7 @@ export async function waitForAuthenticationComplete(page: Page): Promise<void> {
  */
 export function generateTestTOTP(): string {
   // Use the actual TOTP secret from development environment
-  const testSecret = 'J5SFCVC5ENUUENCMLVESKR2TOYTEUWSRJMUG4KDLPNRUGZDLLAWA';
+  const testSecret = 'LBGTQUZDKFWGWNTVFJKFIYTCGMXWY2L5FFEEGMREGU4XAXKOPNXQ';
   
   const token = speakeasy.totp({
     secret: testSecret,

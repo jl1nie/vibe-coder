@@ -301,8 +301,42 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: Run E2E tests
-        run: pnpm run test:e2e
+      - name: Setup Docker for E2E tests
+        run: |
+          export HOST_UID=$(id -u)
+          export HOST_GID=$(id -g)
+          echo "HOST_UID=$HOST_UID" >> $GITHUB_ENV
+          echo "HOST_GID=$HOST_GID" >> $GITHUB_ENV
+
+      - name: Start Docker services for E2E tests
+        run: |
+          export HOST_UID=${{ env.HOST_UID }}
+          export HOST_GID=${{ env.HOST_GID }}
+          docker compose -f docker-compose.dev.yml up -d --build
+          
+          # Wait for services to be ready
+          timeout 60 bash -c 'until curl -s http://localhost:8080/api/health >/dev/null; do sleep 2; done'
+          timeout 30 bash -c 'until nc -z localhost 5175; do sleep 2; done'
+
+      - name: Run E2E tests with proper environment
+        run: |
+          # Start PWA development server in background
+          cd apps/web && npm run dev:test &
+          PWA_PID=$!
+          
+          # Wait for PWA dev server to be ready
+          timeout 30 bash -c 'until curl -s http://localhost:5174 >/dev/null; do sleep 2; done'
+          
+          # Run E2E tests
+          pnpm test:e2e
+          
+          # Cleanup
+          kill $PWA_PID || true
+
+      - name: Stop Docker services
+        if: always()
+        run: |
+          docker compose -f docker-compose.dev.yml down
 
       - name: Upload E2E test results
         uses: actions/upload-artifact@v4
