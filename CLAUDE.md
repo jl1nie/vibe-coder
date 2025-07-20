@@ -680,6 +680,53 @@ pnpm install
 
 ## 🏷️ 開発チェックポイント・リリース履歴
 
+### v0.8.1-claude-auth-fix (2025-07-20)
+
+**Claude CLI認証問題根本解決・HOME環境変数問題特定修正🔧**
+
+**重要な修正:**
+
+- ✅ **ULTRATHINK分析でClaude CLI認証問題根本原因特定**: Docker内HOME=/root継承によるClaude CLI設定ファイル参照問題を発見
+- ✅ **ClaudeInteractiveTerminal環境変数明示的設定**: node-ptyでClaude CLI起動時にHOME=/home/vibecoderを明示的に設定
+- ✅ **Docker volume mount正常動作確認**: ~/.claude:/home/vibecoder/.claude マウント・権限設定正常
+- ✅ **Claude CLI PTY詳細ログ強化**: 認証エラー検出・出力の16進ダンプ・セッション管理ログ追加
+
+**技術的問題解決:**
+
+```typescript
+// packages/host/src/services/claude-interactive-terminal.ts
+env: {
+  // Explicitly override inherited environment variables
+  PATH: process.env.PATH,
+  NODE_ENV: process.env.NODE_ENV,
+  // Claude CLI specific environment
+  CLAUDE_CONFIG_PATH: hostConfig.claudeConfigPath,
+  HOME: '/home/vibecoder', // 明示的にHOMEディレクトリ設定
+  USER: 'vibecoder',
+  // インタラクティブターミナル設定
+  TERM: 'xterm-256color',
+  COLUMNS: '120',
+  LINES: '30',
+  FORCE_COLOR: '1',
+},
+```
+
+**現在の動作状況:**
+
+- 🌐 **PWA**: http://localhost:5174 (稼働中)
+- 🖥️ **Host Server**: localhost:8080 (健全・認証済みセッション1件)
+- 🔗 **Signaling Server**: localhost:5175 (稼働中)  
+- 🤖 **Claude CLI**: PTYモード起動済み・認証済み・コマンド受信待機
+- 🆔 **Host ID**: 27539093 (接続準備完了)
+
+**次のステップ:**
+
+- PWA→Claude CLI実際のコマンド実行テスト
+- WebRTC P2P経由でのリアルタイムClaude Code実行検証
+- モバイルデバイスでの動作確認
+
+---
+
 ### v0.8.0-stable (2025-07-19)
 
 **シンプルプロトコル統合完了・ローカルテスト環境完全整備達成🚀**

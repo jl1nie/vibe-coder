@@ -33,12 +33,16 @@ export class ClaudeInteractiveService {
 
     logger.info('Creating Claude interactive session', { sessionId });
 
+    // First, test claude availability
+    logger.info('Testing Claude CLI availability', { sessionId });
+    
     const claudeProcess = spawn('claude', [], {
       cwd: process.cwd(),
       env: {
         ...process.env,
         CLAUDE_CONFIG_PATH: hostConfig.claudeConfigPath,
-        HOME: '/app',
+        HOME: '/home/vibecoder',
+        USER: 'vibecoder',
         // インタラクティブモードを強制
         TERM: 'xterm-256color',
         COLUMNS: '120',
@@ -61,6 +65,15 @@ export class ClaudeInteractiveService {
     this.sessions.set(sessionId, session);
     this.setupSessionHandlers(session);
 
+    // Claude in pipe mode doesn't show a prompt, so mark it ready after a short delay
+    setTimeout(() => {
+      if (!session.isReady && !session.isDestroyed) {
+        session.isReady = true;
+        logger.info('Claude interactive session ready (pipe mode)', { sessionId });
+        session.onReady?.();
+      }
+    }, 500);
+
     return session;
   }
 
@@ -79,11 +92,22 @@ export class ClaudeInteractiveService {
       logger.debug('Claude stdout', { sessionId, output });
 
       // プロンプトが表示されたらready状態に
-      if (output.includes('claude>') || output.includes('Welcome to Claude')) {
+      if (output.includes('claude>') || output.includes('Welcome to Claude') || output.includes('Usage: claude')) {
         if (!session.isReady) {
           session.isReady = true;
           logger.info('Claude interactive session ready', { sessionId });
           session.onReady?.();
+        }
+      }
+      
+      // 認証エラーの場合もready状態にして、エラーメッセージを送信
+      if (output.includes('Invalid API key') || output.includes('Please run /login')) {
+        if (!session.isReady) {
+          session.isReady = true;
+          logger.warn('Claude authentication error detected', { sessionId });
+          session.onReady?.();
+          // エラーメッセージも送信
+          session.onError?.('Claude CLI authentication required. Please configure API key.');
         }
       }
 
@@ -108,10 +132,18 @@ export class ClaudeInteractiveService {
     });
 
     // プロセスエラー処理
-    claudeProcess.on('error', error => {
+    claudeProcess.on('error', (error) => {
       logger.error('Claude process error', { sessionId, error: error.message });
       session.isDestroyed = true;
+      session.onError?.(`Claude process error: ${error.message}`);
       this.sessions.delete(sessionId);
+    });
+
+    // プロセス開始ログ
+    logger.info('Claude process spawned', { 
+      sessionId, 
+      pid: claudeProcess.pid,
+      configPath: hostConfig.claudeConfigPath 
     });
   }
 
